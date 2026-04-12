@@ -1,14 +1,19 @@
 import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
+import { Github, CheckCircle2, Circle, ArrowRight, ExternalLink, Unlink } from "lucide-react";
 
 import { AppShell } from "~/components/app-shell";
 import { env } from "~/env";
 import { getGithubConnectionStatus } from "~/server/github/connection";
+import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Badge } from "~/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 
 const milestones = [
   "Authorize the GitHub App on your user account",
-  "Install the app on the account or organization that owns your repository",
-  "Return here and continue to repository import",
+  "Install the app on the target account or organization",
+  "Return here and initialize repository import",
 ];
 
 const errorMessages: Record<string, string> = {
@@ -45,124 +50,172 @@ export default async function GithubOnboardingPage({
   const errorMessage = params.error ? errorMessages[params.error] : null;
   const successMessage =
     params.success === "connected"
-      ? "GitHub connected successfully. You can now move on to repository import."
+      ? "GitHub identity successfully mapped to Clerk session."
       : params.success === "disconnected"
-        ? "GitHub has been disconnected and imported projects for this user were removed."
+        ? "GitHub identity unmapped. Local project records purged."
         : null;
 
   return (
     <AppShell
-      description="Connect your GitHub identity now, then install the GitHub App anywhere you want to import repositories from in the next phase."
+      description="Initialize secure GitHub identity mapping and app installation for repository access."
       title="GitHub Onboarding"
     >
-      <section className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-        <div className="rounded-[2rem] bg-slate-950 p-6 text-white shadow-sm">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-amber-300">
-            Phase 2
-          </p>
-          <h2 className="mt-3 text-2xl font-semibold tracking-tight">
-            Connect GitHub
-          </h2>
-          <p className="mt-3 text-sm leading-7 text-slate-300">
-            This step links the authenticated Clerk user to a GitHub identity.
-            The app stores only minimal connection state locally, while GitHub
-            remains the source of truth for repositories and issues.
-          </p>
+      <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="space-y-6">
+          <Card className="rounded-none border-border shadow-none bg-card">
+            <CardHeader className="border-b border-border pb-6">
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+                  Configuration
+                </p>
+                <CardTitle className="text-xl uppercase tracking-tight">Identity Mapping</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="space-y-6">
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  This procedure links your authenticated Clerk session to a GitHub identity. 
+                  Minimal connection metadata is stored locally; GitHub remains the 
+                  authoritative source for repository data and issue state.
+                </p>
 
-          <div className="mt-6 rounded-3xl bg-white/10 p-5">
-            <p className="text-sm text-slate-300">Connection status</p>
-            <p className="mt-2 text-xl font-semibold">
-              {status.connected
-                ? `Connected as ${status.githubUsername}`
-                : "Not connected yet"}
-            </p>
-            <p className="mt-2 text-sm leading-6 text-slate-300">
-              {status.connected
-                ? "Next, install the GitHub App anywhere you want to import repositories from."
-                : "Start by authorizing the GitHub App with your GitHub user account."}
-            </p>
-          </div>
+                <div className="border border-border bg-muted/30 p-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                      System State
+                    </p>
+                    {status.connected ? (
+                      <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 rounded-none text-[10px] font-bold uppercase tracking-widest">
+                        Mapped
+                      </Badge>
+                    ) : (
+                      <Badge className="bg-muted text-muted-foreground border-border rounded-none text-[10px] font-bold uppercase tracking-widest">
+                        Unmapped
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-10 w-10 items-center justify-center bg-background border border-border">
+                      <Github className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold uppercase tracking-tight">
+                        {status.connected ? `@${status.githubUsername}` : "Anonymous"}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground uppercase">
+                        {status.connected ? "Identity Verified" : "Awaiting Authorization"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-none border-border shadow-none bg-card">
+            <CardHeader className="border-b border-border pb-6">
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+                  Procedures
+                </p>
+                <CardTitle className="text-xl uppercase tracking-tight">System Actions</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="flex flex-wrap gap-4">
+                {!status.connected ? (
+                  <Button asChild className="bg-primary text-primary-foreground font-bold uppercase text-[10px] tracking-widest h-12 rounded-none px-8">
+                    <Link href="/api/github/connect">
+                      Initialize Connection
+                    </Link>
+                  </Button>
+                ) : (
+                  <>
+                    <Button asChild className="bg-primary text-primary-foreground font-bold uppercase text-[10px] tracking-widest h-12 rounded-none px-8">
+                      <a href={env.GITHUB_APP_INSTALL_URL} rel="noreferrer" target="_blank">
+                        Install GitHub App
+                        <ExternalLink className="ml-2 h-3.5 w-3.5" />
+                      </a>
+                    </Button>
+                    <Button asChild variant="outline" className="border-border font-bold uppercase text-[10px] tracking-widest h-12 rounded-none px-8">
+                      <Link href="/projects/new">
+                        Project Import
+                        <ArrowRight className="ml-2 h-3.5 w-3.5" />
+                      </Link>
+                    </Button>
+                    <form
+                      action="/api/github/disconnect?returnTo=/onboarding/github"
+                      method="post"
+                      className="w-full sm:w-auto"
+                    >
+                      <Button variant="outline" className="w-full sm:w-auto border-destructive/20 text-destructive hover:bg-destructive/10 font-bold uppercase text-[10px] tracking-widest h-12 rounded-none px-8">
+                        <Unlink className="mr-2 h-3.5 w-3.5" />
+                        Disconnect
+                      </Button>
+                    </form>
+                  </>
+                )}
+              </div>
+              
+              {status.connected && (
+                <p className="mt-6 text-[10px] font-bold uppercase tracking-widest text-muted-foreground leading-relaxed">
+                  Note: If target repositories reside within an Organization, ensure the 
+                  GitHub App is installed on that specific Organization.
+                </p>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         <div className="space-y-6">
-          {errorMessage ? (
-            <div className="rounded-[2rem] border border-rose-200 bg-rose-50 p-5 text-sm leading-7 text-rose-800 shadow-sm">
-              {errorMessage}
-            </div>
-          ) : null}
+          {errorMessage && (
+            <Alert variant="destructive" className="rounded-none border-destructive/20 bg-destructive/10">
+              <AlertTitle className="text-[10px] font-bold uppercase tracking-widest">System Error</AlertTitle>
+              <AlertDescription className="text-xs font-medium uppercase mt-2 leading-relaxed">
+                {errorMessage}
+              </AlertDescription>
+            </Alert>
+          )}
 
-          {successMessage ? (
-            <div className="rounded-[2rem] border border-emerald-200 bg-emerald-50 p-5 text-sm leading-7 text-emerald-800 shadow-sm">
-              {successMessage}
-            </div>
-          ) : null}
+          {successMessage && (
+            <Alert className="rounded-none border-emerald-500/20 bg-emerald-500/10 text-emerald-500">
+              <AlertTitle className="text-[10px] font-bold uppercase tracking-widest text-emerald-500">Operation Success</AlertTitle>
+              <AlertDescription className="text-xs font-medium uppercase mt-2 leading-relaxed">
+                {successMessage}
+              </AlertDescription>
+            </Alert>
+          )}
 
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-            <ol className="space-y-4">
-              {milestones.map((milestone, index) => (
-                <li
-                  className="flex gap-4 rounded-2xl bg-slate-50 p-4"
-                  key={milestone}
-                >
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-950 text-sm font-semibold text-white">
-                    {index + 1}
-                  </span>
-                  <p className="text-sm leading-6 text-slate-700">{milestone}</p>
-                </li>
-              ))}
-            </ol>
-          </div>
-
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-cyan-700">
-              Actions
-            </p>
-            <div className="mt-4 flex flex-wrap gap-3">
-              {!status.connected ? (
-                <Link
-                  className="rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
-                  href="/api/github/connect"
-                >
-                  Connect GitHub
-                </Link>
-              ) : (
-                <>
-                  <a
-                    className="rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
-                    href={env.GITHUB_APP_INSTALL_URL}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    Install GitHub App
-                  </a>
-                  <Link
-                    className="rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold transition hover:border-slate-950"
-                    href="/projects/new"
-                  >
-                    Continue to import
-                  </Link>
-                  <form
-                    action="/api/github/disconnect?returnTo=/onboarding/github"
-                    method="post"
-                  >
-                    <button
-                      className="rounded-full border border-rose-300 px-5 py-3 text-sm font-semibold text-rose-700 transition hover:border-rose-500 hover:text-rose-800"
-                      type="submit"
+          <Card className="rounded-none border-border shadow-none bg-card">
+            <CardHeader className="border-b border-border pb-6">
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+                  Roadmap
+                </p>
+                <CardTitle className="text-xl uppercase tracking-tight">Sequence</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="space-y-4">
+                {milestones.map((milestone, index) => {
+                  const isDone = status.connected && index === 0;
+                  return (
+                    <div
+                      className={`flex gap-4 border border-border p-4 transition ${isDone ? 'bg-muted/30 opacity-60' : 'bg-background'}`}
+                      key={milestone}
                     >
-                      Disconnect GitHub
-                    </button>
-                  </form>
-                </>
-              )}
-            </div>
-
-            {status.connected ? (
-              <p className="mt-4 text-sm leading-7 text-slate-600">
-                If the target repository lives in an organization, install the
-                app on that organization before continuing.
-              </p>
-            ) : null}
-          </div>
+                      <span className={`flex h-6 w-6 shrink-0 items-center justify-center text-[10px] font-bold ${isDone ? 'bg-muted text-muted-foreground' : 'bg-primary text-primary-foreground'}`}>
+                        0{index + 1}
+                      </span>
+                      <p className={`text-xs font-bold uppercase tracking-tight leading-relaxed ${isDone ? 'line-through text-muted-foreground' : ''}`}>
+                        {milestone}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </section>
     </AppShell>

@@ -1,5 +1,6 @@
 import { SignedIn, SignedOut } from "@clerk/nextjs";
 import Link from "next/link";
+import { Terminal, ArrowRight, Github, LayoutDashboard } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -14,98 +15,145 @@ const workflow = [
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,#fef3c7,transparent_30%),linear-gradient(180deg,#fff7ed_0%,#ffffff_48%,#ecfeff_100%)] text-slate-950">
-      <div className="mx-auto flex min-h-screen max-w-6xl flex-col px-6 py-10">
-        <header className="flex items-center justify-between">
-          <Link className="text-lg font-semibold tracking-tight" href="/">
-            Devin
+    <main className="min-h-screen bg-background selection:bg-primary selection:text-primary-foreground">
+      <div className="mx-auto flex min-h-screen max-w-7xl flex-col px-6">
+        <header className="flex h-16 items-center justify-between border-b border-border">
+          <Link href="/" className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center bg-primary text-primary-foreground">
+              <Terminal className="h-5 w-5" />
+            </div>
+            <span className="text-sm font-bold tracking-tighter uppercase">
+              Devin
+            </span>
           </Link>
-          <div className="flex items-center gap-3 text-sm font-medium">
+          <div className="flex items-center gap-4">
             <SignedOut>
               <Link
-                className="rounded-full border border-slate-300 px-4 py-2 transition hover:border-slate-950"
+                className="text-xs font-bold uppercase tracking-widest text-muted-foreground transition hover:text-foreground"
                 href="/sign-in"
               >
                 Sign in
               </Link>
               <Link
-                className="rounded-full bg-slate-950 px-4 py-2 text-white transition hover:bg-slate-800"
+                className="bg-primary px-4 py-2 text-xs font-bold uppercase tracking-widest text-primary-foreground transition hover:bg-primary/90"
                 href="/sign-up"
               >
-                Create account
+                Get Started
               </Link>
             </SignedOut>
             <SignedIn>
               <Link
-                className="rounded-full bg-slate-950 px-4 py-2 text-white transition hover:bg-slate-800"
+                className="flex items-center gap-2 bg-primary px-4 py-2 text-xs font-bold uppercase tracking-widest text-primary-foreground transition hover:bg-primary/90"
                 href="/dashboard"
                 prefetch={false}
               >
-                Open dashboard
+                <LayoutDashboard className="h-4 w-4" />
+                Dashboard
               </Link>
             </SignedIn>
           </div>
         </header>
 
-        <section className="grid flex-1 items-center gap-12 py-16 lg:grid-cols-[1.2fr_0.8fr]">
-          <div className="space-y-8">
-            <div className="inline-flex rounded-full border border-amber-300 bg-white/80 px-4 py-1 text-sm font-medium text-amber-900 shadow-sm backdrop-blur">
-              Phase 1 foundation
+        <section className="grid flex-1 items-center gap-12 py-16 lg:grid-cols-[1fr_0.8fr]">
+          <div className="space-y-12">
+            <div className="inline-flex items-center gap-2 border border-border bg-muted/50 px-3 py-1">
+              <div className="h-2 w-2 animate-pulse bg-emerald-500" />
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em]">
+                System Status: Operational
+              </span>
             </div>
-            <div className="space-y-5">
-              <h1 className="max-w-3xl text-5xl font-semibold tracking-tight text-balance sm:text-6xl">
-                GitHub contribution workflows without developer tooling overhead.
+            
+            <div className="space-y-6">
+              <h1 className="text-4xl font-bold tracking-tighter uppercase sm:text-6xl lg:text-7xl">
+                The Contribution <br />
+                <span className="text-muted-foreground">Layer for</span> <br />
+                Everyone.
               </h1>
-              <p className="max-w-2xl text-lg leading-8 text-slate-600">
-                Devin gives non-technical teammates a calmer path into existing
-                repositories. This foundation ships auth, data models, and a
-                protected app shell so the MVP flow can grow phase by phase.
+              <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
+                Devin is a minimalist interface for GitHub workflows. We remove the 
+                complexity of developer tooling, providing a clean technical readout 
+                for non-technical contributors to bridge the gap between ideas and code.
               </p>
             </div>
-            <div className="flex flex-wrap gap-3">
+
+            <div className="flex flex-wrap gap-4">
               <Link
-                className="rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+                className="group flex items-center gap-2 bg-primary px-6 py-4 text-xs font-bold uppercase tracking-widest text-primary-foreground transition hover:bg-primary/90"
                 href="/dashboard"
                 prefetch={false}
               >
-                View protected app
+                Initialize App
+                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
               </Link>
               <Link
-                className="rounded-full border border-slate-300 bg-white px-5 py-3 text-sm font-semibold transition hover:border-slate-950"
+                className="flex items-center gap-2 border border-border bg-background px-6 py-4 text-xs font-bold uppercase tracking-widest transition hover:bg-muted"
                 href="/sign-up"
               >
-                Start with Clerk
+                <Github className="h-4 w-4" />
+                Auth via Clerk
               </Link>
+            </div>
+
+            <div className="grid grid-cols-2 gap-8 border-t border-border pt-8">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+                  Architecture
+                </p>
+                <p className="mt-2 text-xs font-bold">NEXT.JS 15 + PRISMA</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+                  Security
+                </p>
+                <p className="mt-2 text-xs font-bold">CLERK PROTECTED</p>
+              </div>
             </div>
           </div>
 
-          <div className="rounded-[2rem] border border-slate-200 bg-white/80 p-6 shadow-[0_20px_70px_rgba(15,23,42,0.08)] backdrop-blur">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-4">
-              <div>
-                <p className="text-sm font-medium text-slate-500">
-                  MVP workflow
-                </p>
-                <h2 className="text-2xl font-semibold">Tiny contribution loop</h2>
+          <div className="border border-border bg-card p-1 shadow-2xl">
+            <div className="border border-border bg-background p-6">
+              <div className="flex items-center justify-between border-b border-border pb-6">
+                <div className="space-y-1">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+                    Workflow
+                  </p>
+                  <h2 className="text-xl font-bold uppercase tracking-tight">Tiny Contribution Loop</h2>
+                </div>
+                <div className="border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-emerald-500">
+                  Active
+                </div>
               </div>
-              <div className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">
-                Active
+              <div className="mt-8 space-y-2">
+                {workflow.map((step, index) => (
+                  <div
+                    className="group flex items-center gap-4 border border-transparent p-3 transition hover:border-border hover:bg-muted/50"
+                    key={step}
+                  >
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center bg-muted text-[10px] font-bold transition group-hover:bg-primary group-hover:text-primary-foreground">
+                      0{index + 1}
+                    </span>
+                    <p className="text-xs font-medium leading-none tracking-tight text-muted-foreground group-hover:text-foreground">
+                      {step}
+                    </p>
+                  </div>
+                ))}
               </div>
             </div>
-            <ol className="mt-6 space-y-4">
-              {workflow.map((step, index) => (
-                <li
-                  className="flex items-start gap-4 rounded-2xl bg-slate-50 px-4 py-3"
-                  key={step}
-                >
-                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-950 text-sm font-semibold text-white">
-                    {index + 1}
-                  </span>
-                  <p className="text-sm leading-6 text-slate-700">{step}</p>
-                </li>
-              ))}
-            </ol>
           </div>
         </section>
+
+        <footer className="mt-auto border-t border-border py-8">
+          <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+              © 2026 Devin Engineering
+            </p>
+            <div className="flex gap-6">
+              <a href="#" className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground">Docs</a>
+              <a href="#" className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground">API</a>
+              <a href="#" className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground">System Log</a>
+            </div>
+          </div>
+        </footer>
       </div>
     </main>
   );
