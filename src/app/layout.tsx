@@ -2,10 +2,15 @@ import "~/styles/globals.css";
 
 import { ClerkProvider } from "@clerk/nextjs";
 import { type Metadata } from "next";
-import { JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import { cn } from "~/lib/utils";
 import { ThemeProvider } from "~/components/theme-provider";
 import { TooltipProvider } from "~/components/ui/tooltip";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-sans",
+});
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
@@ -27,10 +32,10 @@ export default function RootLayout({
     <ClerkProvider>
       <html
         lang="en"
-        className={cn("font-mono", jetbrainsMono.variable)}
+        className={cn("antialiased", inter.variable, jetbrainsMono.variable)}
         suppressHydrationWarning
       >
-        <body className="antialiased">
+        <body className="font-sans min-h-screen bg-background">
           <ThemeProvider
             attribute="class"
             defaultTheme="system"

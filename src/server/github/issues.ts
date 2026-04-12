@@ -6,7 +6,9 @@ type GithubIssueResponse = {
   number: number;
   title: string;
   html_url: string;
+  body: string | null;
   created_at: string;
+  state: string;
   updated_at: string;
   comments: number;
   user: {
@@ -19,10 +21,12 @@ type GithubIssueResponse = {
 
 export type ProjectIssue = {
   author: string;
+  body: string | null;
   comments: number;
   createdAt: string;
   id: number;
   number: number;
+  state: string;
   title: string;
   updatedAt: string;
   url: string;
@@ -36,6 +40,16 @@ export type ProjectIssuesResult =
   | {
       issues: [];
       status: "missing_access" | "error";
+    };
+
+export type ProjectIssueResult =
+  | {
+      issue: ProjectIssue;
+      status: "ok";
+    }
+  | {
+      issue: null;
+      status: "missing_access" | "error" | "not_found";
     };
 
 export async function fetchProjectOpenIssues(
@@ -86,10 +100,12 @@ export async function fetchProjectOpenIssues(
     .slice(0, 10)
     .map<ProjectIssue>((issue) => ({
       author: issue.user.login,
+      body: issue.body,
       comments: issue.comments,
       createdAt: issue.created_at,
       id: issue.id,
       number: issue.number,
+      state: issue.state,
       title: issue.title,
       updatedAt: issue.updated_at,
       url: issue.html_url,
@@ -97,6 +113,83 @@ export async function fetchProjectOpenIssues(
 
   return {
     issues,
+    status: "ok",
+  };
+}
+
+export async function fetchProjectIssue(
+  repoOwner: string,
+  repoName: string,
+  issueNumber: number,
+): Promise<ProjectIssueResult> {
+  const installationToken = await getRepoInstallationAccessToken(
+    repoOwner,
+    repoName,
+  );
+
+  if (!installationToken) {
+    return {
+      issue: null,
+      status: "missing_access",
+    };
+  }
+
+  const response = await fetch(
+    `https://api.github.com/repos/${repoOwner}/${repoName}/issues/${issueNumber}`,
+    {
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${installationToken}`,
+        "User-Agent": "devin-app",
+        "X-GitHub-Api-Version": GITHUB_API_VERSION,
+      },
+      cache: "no-store",
+    },
+  );
+
+  if (response.status === 404) {
+    return {
+      issue: null,
+      status: "not_found",
+    };
+  }
+
+  if (response.status === 403) {
+    return {
+      issue: null,
+      status: "missing_access",
+    };
+  }
+
+  if (!response.ok) {
+    return {
+      issue: null,
+      status: "error",
+    };
+  }
+
+  const issue = (await response.json()) as GithubIssueResponse;
+
+  if (issue.pull_request) {
+    return {
+      issue: null,
+      status: "not_found",
+    };
+  }
+
+  return {
+    issue: {
+      author: issue.user.login,
+      body: issue.body,
+      comments: issue.comments,
+      createdAt: issue.created_at,
+      id: issue.id,
+      number: issue.number,
+      state: issue.state,
+      title: issue.title,
+      updatedAt: issue.updated_at,
+      url: issue.html_url,
+    },
     status: "ok",
   };
 }

@@ -1,5 +1,8 @@
 import { db } from "~/server/db";
 import { clearGithubImportSession } from "~/server/github/import-session";
+import { clearPendingProjectEdit } from "~/server/github/pending-edit-session";
+import { clearPostCommitResult } from "~/server/github/post-commit-session";
+import { clearPullRequestResult } from "~/server/github/pull-request-session";
 
 export async function getGithubConnectionStatus(userId: string) {
   const user = await db.user.findUnique({
@@ -49,4 +52,7 @@ export async function disconnectGithub(userId: string) {
   ]);
 
   await clearGithubImportSession();
+  await clearPendingProjectEdit();
+  await clearPostCommitResult();
+  await clearPullRequestResult();
 }

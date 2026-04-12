@@ -71,7 +71,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 <SidebarMenuButton
                   asChild
                   isActive={isActive}
-                  className="font-mono text-sm group"
+                  className="text-sm group"
                 >
                   <Link href={item.href}>
                     <item.icon className="mr-2 h-4 w-4" />
