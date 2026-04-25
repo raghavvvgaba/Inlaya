@@ -16,7 +16,6 @@ import { AppShell } from "~/components/app-shell";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { env } from "~/env";
 import { fetchProjectOpenIssues } from "~/server/github/issues";
 import { getOwnedProject } from "~/server/projects";
@@ -26,22 +25,22 @@ type ProjectPageProps = {
   searchParams: Promise<{ error?: string; success?: string }>;
 };
 
-const successMessages: Record<string, string> = {
-  already_imported:
-    "Repository already indexed. Redirected to existing project record.",
-};
-
 function formatProjectDate(value: Date) {
-  return value.toLocaleString().toUpperCase();
+  return value.toLocaleString("en-US", {
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).toUpperCase();
 }
 
 export default async function ProjectPage({
   params,
-  searchParams,
+  searchParams: _searchParams,
 }: ProjectPageProps) {
   const { userId } = await auth();
   const { id } = await params;
-  const query = await searchParams;
   const project = await getOwnedProject(id, userId!);
 
   if (!project) {
@@ -52,131 +51,53 @@ export default async function ProjectPage({
     project.repoOwner,
     project.repoName,
   );
-  const successMessage = query.success
-    ? (successMessages[query.success] ?? null)
-    : null;
 
   return (
     <AppShell
-      description="Project workspace online. Review the imported repository and open one issue to prepare a dedicated change."
-      title="Project Terminal"
+      compactHeader
+      description=""
+      title="Project"
     >
-      <div className="space-y-8">
-        {successMessage ? (
-          <Alert className="rounded-none border-emerald-500/20 bg-emerald-500/10 text-emerald-500">
-            <Activity className="h-4 w-4 text-emerald-500" />
-            <AlertTitle className="text-[10px] font-bold uppercase tracking-widest">
-              System Notice
-            </AlertTitle>
-            <AlertDescription className="mt-1 text-xs font-medium uppercase">
-              {successMessage}
-            </AlertDescription>
-          </Alert>
-        ) : null}
+      <div className="-mt-4 space-y-8 lg:-mt-6">
+        <section className="space-y-4 border-b border-border pb-6">
+          <div className="flex items-start justify-between gap-4">
+            <Button
+              asChild
+              variant="outline"
+              className="h-10 rounded-none border-border px-4 text-[10px] font-bold uppercase tracking-widest"
+            >
+              <Link href="/dashboard">
+                <ChevronLeft className="mr-2 h-3.5 w-3.5" />
+                Return to Dashboard
+              </Link>
+            </Button>
+            <Button
+              asChild
+              variant="outline"
+              className="h-10 w-10 rounded-none border-border p-0"
+            >
+              <a
+                href={`https://github.com/${project.repoOwner}/${project.repoName}`}
+                rel="noreferrer"
+                target="_blank"
+              >
+                <ExternalLink className="h-4 w-4" />
+                <span className="sr-only">Open Repository</span>
+              </a>
+            </Button>
+          </div>
 
-        <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-          <Card className="rounded-none border-border shadow-none bg-card">
-            <CardHeader className="border-b border-border pb-6">
-              <div className="space-y-1">
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-                  Resource
-                </p>
-                <CardTitle className="text-xl uppercase tracking-tight">
-                  Managed Repository
-                </CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <div className="space-y-6">
-                <div className="flex items-center gap-4 border border-border bg-muted/30 p-4">
-                  <div className="flex h-12 w-12 items-center justify-center bg-background border border-border">
-                    <Github className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-bold uppercase tracking-tight">
-                      {project.repoOwner}/{project.repoName}
-                    </h2>
-                    <p className="text-[10px] text-muted-foreground uppercase">
-                      Issue-first workflow enabled
-                    </p>
-                  </div>
-                </div>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  Open one issue to enter the execution flow. File preparation,
-                  branch creation, and commit creation now happen inside the
-                  issue workspace so every change is clearly tied back to a
-                  specific GitHub issue.
-                </p>
-                <div className="flex flex-wrap gap-3">
-                  <Button
-                    asChild
-                    variant="outline"
-                    className="border-border font-bold uppercase text-[10px] tracking-widest h-10 rounded-none px-4"
-                  >
-                    <Link href="/dashboard">
-                      <ChevronLeft className="mr-2 h-3.5 w-3.5" />
-                      Return to Dashboard
-                    </Link>
-                  </Button>
-                  <Button
-                    asChild
-                    variant="outline"
-                    className="border-border font-bold uppercase text-[10px] tracking-widest h-10 rounded-none px-4"
-                  >
-                    <a
-                      href={`https://github.com/${project.repoOwner}/${project.repoName}`}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      Open Repository
-                      <ExternalLink className="ml-2 h-3.5 w-3.5" />
-                    </a>
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-none border-border shadow-none bg-card">
-            <CardHeader className="border-b border-border pb-6">
-              <div className="space-y-1">
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-                  Snapshot
-                </p>
-                <CardTitle className="text-xl uppercase tracking-tight">
-                  Metadata
-                </CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <div className="space-y-4">
-                <div className="flex flex-col gap-1 border-b border-border pb-3">
-                  <span className="text-[10px] font-bold uppercase text-muted-foreground">
-                    Internal ID
-                  </span>
-                  <span className="text-xs font-bold font-mono truncate uppercase">
-                    {project.id}
-                  </span>
-                </div>
-                <div className="flex flex-col gap-1 border-b border-border pb-3">
-                  <span className="text-[10px] font-bold uppercase text-muted-foreground">
-                    Indexed On
-                  </span>
-                  <span className="text-xs font-bold font-mono">
-                    {formatProjectDate(project.createdAt)}
-                  </span>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-[10px] font-bold uppercase text-muted-foreground">
-                    Open Issues Loaded
-                  </span>
-                  <span className="text-xs font-bold font-mono">
-                    {issuesResult.status === "ok" ? issuesResult.issues.length : 0} / 10
-                  </span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+              <Github className="h-5 w-5 text-muted-foreground" />
+              <h2 className="text-xl font-bold uppercase tracking-tight">
+                {project.repoOwner}/{project.repoName}
+              </h2>
+            </div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+              Indexed On {formatProjectDate(project.createdAt)}
+            </p>
+          </div>
         </section>
 
         <section className="space-y-6">

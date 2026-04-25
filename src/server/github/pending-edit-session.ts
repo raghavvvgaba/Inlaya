@@ -18,12 +18,15 @@ export type PendingProjectEdit = {
   filePath: string;
   issueNumber: number;
   issueTitle: string;
+  model: string;
   originalContent: string;
   originalSha: string;
   projectId: string;
   repoName: string;
   repoOwner: string;
+  summary: string;
   updatedContent: string;
+  userInstruction: string;
 };
 
 function createEncryptionKey() {

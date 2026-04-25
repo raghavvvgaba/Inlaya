@@ -26,6 +26,22 @@ function redirectToIssueWithStatus(
   return NextResponse.redirect(redirectUrl, { status: 303 });
 }
 
+function getCommitErrorCode(status: string) {
+  if (status === "missing_access") {
+    return "commit_access_missing";
+  }
+
+  if (status === "branch_conflict") {
+    return "commit_branch_conflict";
+  }
+
+  if (status === "file_conflict") {
+    return "commit_file_conflict";
+  }
+
+  return "commit_failed";
+}
+
 export async function POST(request: Request, context: CommitRouteContext) {
   const { userId, redirectToSignIn } = await auth();
 
@@ -58,21 +74,23 @@ export async function POST(request: Request, context: CommitRouteContext) {
   const commitResult = await commitPreparedEdit({
     filePath: pendingEdit.filePath,
     issueNumber,
-    originalSha: pendingEdit.originalSha,
     repoName: project.repoName,
     repoOwner: project.repoOwner,
     updatedContent: pendingEdit.updatedContent,
   });
 
   if (commitResult.status !== "ok") {
+    console.error("GitHub commit failed", {
+      message: commitResult.message,
+      status: commitResult.status,
+    });
+
     return redirectToIssueWithStatus(
       request,
       project.id,
       issueNumber,
       "error",
-      commitResult.status === "missing_access"
-        ? "commit_access_missing"
-        : "commit_failed",
+      getCommitErrorCode(commitResult.status),
     );
   }
 

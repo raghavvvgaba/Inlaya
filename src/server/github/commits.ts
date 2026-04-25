@@ -17,10 +17,24 @@ type GithubCommitResponse = {
   };
 };
 
+type GithubContentResponse = {
+  sha: string;
+  type: string;
+};
+
+type GithubErrorResponse = {
+  errors?: Array<{
+    code?: string;
+    field?: string;
+    message?: string;
+    resource?: string;
+  }>;
+  message?: string;
+};
+
 type CommitPreparedEditInput = {
   filePath: string;
   issueNumber: number;
-  originalSha: string;
   repoName: string;
   repoOwner: string;
   updatedContent: string;
@@ -41,7 +55,13 @@ export type CommitPreparedEditResult =
       status: "ok";
     }
   | {
-      status: "missing_access" | "error";
+      message?: string;
+      status:
+        | "branch_conflict"
+        | "error"
+        | "file_conflict"
+        | "github_error"
+        | "missing_access";
     };
 
 async function githubInstallationFetch(
@@ -64,7 +84,21 @@ async function githubInstallationFetch(
 }
 
 function getBranchName(issueNumber: number) {
-  return `issue-${issueNumber}-hello-world`;
+  return `issue-${issueNumber}-ai-edit`;
+}
+
+async function readGithubError(response: Response) {
+  try {
+    const data = (await response.json()) as GithubErrorResponse;
+    const errorMessages = data.errors
+      ?.map((error) => error.message ?? error.code)
+      .filter(Boolean)
+      .join("; ");
+
+    return [data.message, errorMessages].filter(Boolean).join(": ");
+  } catch {
+    return response.statusText || `GitHub returned ${response.status}`;
+  }
 }
 
 async function getDefaultBranchState(
@@ -82,7 +116,10 @@ async function getDefaultBranchState(
   }
 
   if (!repoResponse.ok) {
-    return { status: "error" as const };
+    return {
+      message: await readGithubError(repoResponse),
+      status: "github_error" as const,
+    };
   }
 
   const repo = (await repoResponse.json()) as GithubRepoResponse;
@@ -96,7 +133,10 @@ async function getDefaultBranchState(
   }
 
   if (!branchResponse.ok) {
-    return { status: "error" as const };
+    return {
+      message: await readGithubError(branchResponse),
+      status: "github_error" as const,
+    };
   }
 
   const branch = (await branchResponse.json()) as GithubBranchResponse;
@@ -128,7 +168,19 @@ async function ensureBranchExists(
   );
 
   if (response.status === 422) {
-    return { status: "ok" as const };
+    const branchResponse = await githubInstallationFetch(
+      `/repos/${repoOwner}/${repoName}/branches/${encodeURIComponent(branchName)}`,
+      accessToken,
+    );
+
+    if (branchResponse.ok) {
+      return { status: "already_exists" as const };
+    }
+
+    return {
+      message: await readGithubError(response),
+      status: "branch_conflict" as const,
+    };
   }
 
   if (response.status === 404 || response.status === 403) {
@@ -136,10 +188,55 @@ async function ensureBranchExists(
   }
 
   if (!response.ok) {
-    return { status: "error" as const };
+    return {
+      message: await readGithubError(response),
+      status: "github_error" as const,
+    };
   }
 
-  return { status: "ok" as const };
+  return { status: "created" as const };
+}
+
+async function getBranchFileState(
+  repoOwner: string,
+  repoName: string,
+  branchName: string,
+  filePath: string,
+  accessToken: string,
+) {
+  const response = await githubInstallationFetch(
+    `/repos/${repoOwner}/${repoName}/contents/${encodeGithubPath(filePath)}?ref=${encodeURIComponent(branchName)}`,
+    accessToken,
+  );
+
+  if (response.status === 404) {
+    return { status: "missing_file" as const };
+  }
+
+  if (response.status === 403) {
+    return { status: "missing_access" as const };
+  }
+
+  if (!response.ok) {
+    return {
+      message: await readGithubError(response),
+      status: "github_error" as const,
+    };
+  }
+
+  const file = (await response.json()) as GithubContentResponse;
+
+  if (file.type !== "file") {
+    return {
+      message: `${filePath} is not a file on ${branchName}`,
+      status: "file_conflict" as const,
+    };
+  }
+
+  return {
+    sha: file.sha,
+    status: "ok" as const,
+  };
 }
 
 export async function commitPreparedEdit(
@@ -161,7 +258,7 @@ export async function commitPreparedEdit(
   );
 
   if (branchState.status !== "ok") {
-    return { status: branchState.status };
+    return branchState;
   }
 
   const branchName = getBranchName(input.issueNumber);
@@ -173,8 +270,23 @@ export async function commitPreparedEdit(
     installationToken,
   );
 
-  if (branchResult.status !== "ok") {
-    return { status: branchResult.status };
+  if (
+    branchResult.status !== "created" &&
+    branchResult.status !== "already_exists"
+  ) {
+    return branchResult;
+  }
+
+  const branchFile = await getBranchFileState(
+    input.repoOwner,
+    input.repoName,
+    branchName,
+    input.filePath,
+    installationToken,
+  );
+
+  if (branchFile.status !== "ok" && branchFile.status !== "missing_file") {
+    return branchFile;
   }
 
   const response = await githubInstallationFetch(
@@ -184,8 +296,8 @@ export async function commitPreparedEdit(
       body: JSON.stringify({
         branch: branchName,
         content: Buffer.from(input.updatedContent, "utf8").toString("base64"),
-        message: `Append hello world to ${input.filePath} for #${input.issueNumber}`,
-        sha: input.originalSha,
+        message: `Update ${input.filePath} for #${input.issueNumber}`,
+        ...(branchFile.status === "ok" ? { sha: branchFile.sha } : {}),
       }),
       method: "PUT",
     },
@@ -195,8 +307,18 @@ export async function commitPreparedEdit(
     return { status: "missing_access" };
   }
 
+  if (response.status === 409 || response.status === 422) {
+    return {
+      message: await readGithubError(response),
+      status: "file_conflict",
+    };
+  }
+
   if (!response.ok) {
-    return { status: "error" };
+    return {
+      message: await readGithubError(response),
+      status: "github_error",
+    };
   }
 
   const data = (await response.json()) as GithubCommitResponse;

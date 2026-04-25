@@ -1,4 +1,5 @@
 import { GITHUB_API_VERSION } from "~/server/github/constants";
+import { generateSingleFileEdit } from "~/server/ai/openrouter";
 import { getRepoInstallationAccessToken } from "~/server/github/app-auth";
 
 type GithubContentResponse = {
@@ -20,26 +21,24 @@ function encodeGithubPath(filePath: string) {
 export type PreparedProjectEdit =
   | {
       filePath: string;
+      model: string;
       originalContent: string;
       originalSha: string;
       status: "ok";
+      summary: string;
       updatedContent: string;
     }
   | {
-      status: "file_not_found" | "missing_access" | "error";
+      status:
+        | "error"
+        | "file_not_found"
+        | "invalid_response"
+        | "missing_access"
+        | "missing_api_key"
+        | "model_error"
+        | "no_changes"
+        | "unsupported_file";
     };
-
-function appendHelloWorld(content: string) {
-  if (content.length === 0) {
-    return "hello world\n";
-  }
-
-  if (content.endsWith("\n")) {
-    return `${content}hello world\n`;
-  }
-
-  return `${content}\nhello world\n`;
-}
 
 function decodeGithubContent(content: string, encoding: string) {
   if (encoding !== "base64") {
@@ -49,10 +48,12 @@ function decodeGithubContent(content: string, encoding: string) {
   return Buffer.from(content.replaceAll("\n", ""), "base64").toString("utf8");
 }
 
-export async function prepareAppendHelloWorldEdit(
+export async function prepareSingleFileAiEdit(
   repoOwner: string,
   repoName: string,
   filePath: string,
+  issueTitle: string,
+  userInstruction: string,
 ): Promise<PreparedProjectEdit> {
   const installationToken = await getRepoInstallationAccessToken(
     repoOwner,
@@ -99,13 +100,27 @@ export async function prepareAppendHelloWorldEdit(
       contentData.content,
       contentData.encoding,
     );
+    const aiEdit = await generateSingleFileEdit({
+      filePath: contentData.path,
+      issueTitle,
+      originalContent,
+      repoName,
+      repoOwner,
+      userInstruction,
+    });
+
+    if (aiEdit.status !== "ok") {
+      return { status: aiEdit.status };
+    }
 
     return {
       filePath: contentData.path,
+      model: aiEdit.model,
       originalContent,
       originalSha: contentData.sha,
       status: "ok",
-      updatedContent: appendHelloWorld(originalContent),
+      summary: aiEdit.summary,
+      updatedContent: aiEdit.updatedContent,
     };
   } catch {
     return { status: "error" };

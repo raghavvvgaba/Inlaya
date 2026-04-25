@@ -9,7 +9,7 @@ const workflow = [
   "Connect GitHub",
   "Import an existing repository",
   "Open a project and review issues",
-  'Append "hello world" to a file',
+  "Generate an AI edit for one file",
   "Commit, push, and open a pull request",
 ];
 

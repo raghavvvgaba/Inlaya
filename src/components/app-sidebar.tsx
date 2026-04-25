@@ -47,7 +47,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   return (
     <Sidebar className="border-r border-border" {...props}>
-      <SidebarHeader className="border-b border-border p-4">
+      <SidebarHeader className="border-b border-border px-4 py-2.5">
         <Link href="/" className="flex items-center gap-2 group">
           <div className="flex h-8 w-8 items-center justify-center bg-primary text-primary-foreground">
             <Terminal className="h-5 w-5" />
