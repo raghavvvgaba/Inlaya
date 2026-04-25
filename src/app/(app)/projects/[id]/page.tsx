@@ -58,8 +58,8 @@ export default async function ProjectPage({
       description=""
       title="Project"
     >
-      <div className="-mt-4 space-y-8 lg:-mt-6">
-        <section className="space-y-4 border-b border-border pb-6">
+      <div className="space-y-7">
+        <section className="space-y-4 border-b border-border pb-5">
           <div className="flex items-start justify-between gap-4">
             <Button
               asChild
@@ -90,9 +90,9 @@ export default async function ProjectPage({
           <div className="space-y-2">
             <div className="flex items-center gap-3">
               <Github className="h-5 w-5 text-muted-foreground" />
-              <h2 className="text-xl font-bold uppercase tracking-tight">
+              <h1 className="text-2xl font-bold uppercase tracking-tight">
                 {project.repoOwner}/{project.repoName}
-              </h2>
+              </h1>
             </div>
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
               Indexed On {formatProjectDate(project.createdAt)}
@@ -101,14 +101,11 @@ export default async function ProjectPage({
         </section>
 
         <section className="space-y-6">
-          <div className="flex items-center justify-between border-b border-border pb-6">
-            <div className="space-y-1">
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-                Live Feed
-              </p>
-              <h3 className="text-xl font-bold uppercase tracking-tight">
+          <div className="flex items-center justify-between border-b border-border pb-5">
+            <div>
+              <h2 className="text-lg font-bold uppercase tracking-tight">
                 Repository Issues
-              </h3>
+              </h2>
             </div>
           </div>
 
@@ -169,7 +166,7 @@ export default async function ProjectPage({
             <div className="grid gap-px border border-border bg-border">
               {issuesResult.issues.map((issue) => (
                 <div
-                  className="flex flex-col gap-4 bg-card p-6 md:flex-row md:items-start md:justify-between"
+                  className="group/issue relative flex flex-col gap-4 bg-card p-6 transition-[background-color,box-shadow,transform] duration-200 before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-emerald-500 before:opacity-0 before:transition-opacity hover:-translate-y-0.5 hover:bg-muted/40 hover:shadow-[0_14px_45px_rgba(0,0,0,0.22)] hover:before:opacity-100 md:flex-row md:items-start md:justify-between"
                   key={issue.id}
                 >
                   <Link
@@ -180,24 +177,21 @@ export default async function ProjectPage({
                       <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/10 rounded-none text-[10px] font-bold uppercase tracking-widest">
                         OPEN
                       </Badge>
-                      <span className="text-xs font-bold font-mono text-muted-foreground uppercase tracking-widest">
-                        LOG_{issue.number}
-                      </span>
                     </div>
                     <div>
-                      <h4 className="text-sm font-bold uppercase tracking-tight transition-colors group-hover:text-primary">
+                      <h4 className="text-sm font-bold uppercase tracking-tight transition-colors group-hover:text-primary group-hover/issue:text-primary">
                         {issue.title}
                       </h4>
-                      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
-                        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 transition-colors group-hover/issue:text-muted-foreground/90">
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground transition-colors group-hover/issue:text-muted-foreground/90">
                           <Activity className="h-3 w-3" />
                           {issue.author}
                         </div>
-                        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground transition-colors group-hover/issue:text-muted-foreground/90">
                           <MessageSquare className="h-3 w-3" />
                           {issue.comments} REPLIES
                         </div>
-                        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground transition-colors group-hover/issue:text-muted-foreground/90">
                           <Clock className="h-3 w-3" />
                           UPDATED {new Date(issue.updatedAt).toLocaleDateString().toUpperCase()}
                         </div>
@@ -208,7 +202,7 @@ export default async function ProjectPage({
                   <div className="flex flex-wrap items-center gap-3">
                     <Button
                       asChild
-                      className="rounded-none font-bold uppercase text-[10px] tracking-widest h-10 px-4"
+                      className="h-10 rounded-none px-4 text-[10px] font-bold uppercase tracking-widest transition-transform group-hover/issue:-translate-y-px"
                     >
                       <Link href={`/projects/${project.id}/issues/${issue.number}`}>
                         Open Issue Workspace

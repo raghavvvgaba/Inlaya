@@ -10,7 +10,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { UserButton } from "@clerk/nextjs"
+import { UserButton, useUser } from "@clerk/nextjs"
 
 import {
   Sidebar,
@@ -44,6 +44,12 @@ const navItems = [
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
+  const { user } = useUser()
+  const displayName =
+    user?.fullName?.trim() ||
+    [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim() ||
+    user?.primaryEmailAddress?.emailAddress ||
+    "Profile"
 
   return (
     <Sidebar className="border-r border-border" {...props}>
@@ -101,7 +107,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 Account
               </span>
               <span className="text-xs font-bold uppercase truncate max-w-[100px]">
-                Profile
+                {displayName}
               </span>
             </div>
           </div>

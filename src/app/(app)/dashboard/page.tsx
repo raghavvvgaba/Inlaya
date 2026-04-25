@@ -1,10 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import {
-  Activity,
-  AlertCircle,
   ArrowUpRight,
-  CheckCircle2,
   Github,
   Layers,
   Plus,
@@ -13,12 +10,6 @@ import {
 import { AppShell } from "~/components/app-shell";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
 import { db } from "~/server/db";
 import { getGithubConnectionStatus } from "~/server/github/connection";
 
@@ -37,10 +28,10 @@ export default async function DashboardPage() {
 
   return (
     <AppShell
-      description="System initialization complete. Review connection status and continue the workflow from the compact control surface below."
+      description=""
       title="Dashboard"
     >
-      <div className="flex justify-end">
+      <div className="flex justify-end pb-8">
         <div className="flex flex-wrap items-center gap-2">
           {githubStatus.connected ? (
             <Badge className="rounded-none px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest border-border bg-card text-foreground hover:bg-card">
@@ -71,96 +62,20 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <section className="grid gap-4 xl:grid-cols-[1fr_0.8fr]">
-
-        <Card
-          className="rounded-none border-border bg-card shadow-none"
-          size="sm"
-        >
-          <CardHeader className="border-b border-border pb-4">
-            <div className="flex items-center justify-between gap-4">
-              <div className="space-y-1">
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-                  Integration
-                </p>
-                <CardTitle className="text-sm uppercase tracking-tight">
-                  GitHub Core
-                </CardTitle>
-              </div>
-              <Github className="h-4 w-4 text-muted-foreground" />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-4">
-            <div className="flex items-start gap-3">
-              {githubStatus.connected ? (
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-              ) : (
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-              )}
-                <div className="space-y-1">
-                  <p className="text-xs font-bold uppercase tracking-tight">
-                    {githubStatus.connected
-                      ? `@${githubStatus.githubUsername}`
-                      : "Identity Link Pending"}
-                  </p>
-                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                    {githubStatus.connected
-                      ? "Ready for repo operations"
-                      : "OAuth required before import"}
-                  </p>
-                </div>
-              </div>
-              {!githubStatus.connected ? (
-                <div className="mt-4">
-                  <Button
-                    asChild
-                    size="sm"
-                    className="h-8 rounded-none px-3 text-[10px] font-bold uppercase tracking-widest"
-                  >
-                    <Link href="/onboarding/github">Connect</Link>
-                  </Button>
-                </div>
-              ) : null}
-            </CardContent>
-          </Card>
-
-        <Card
-          className="overflow-hidden rounded-none border-border bg-primary text-primary-foreground shadow-none"
-          size="sm"
-        >
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between gap-3">
-              <div className="space-y-1">
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary-foreground/60">
-                  Snapshot
-                </p>
-                <CardTitle className="text-sm uppercase tracking-tight">
-                  Projects
-                </CardTitle>
-              </div>
-              <Activity className="h-4 w-4 text-primary-foreground/70" />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="text-3xl font-bold tracking-tighter">
-              {projectCount}
-            </div>
-            <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-primary-foreground/60">
-              Managed Repositories
-            </p>
-          </CardContent>
-        </Card>
-      </section>
-
-      <section className="mt-6 space-y-5">
+      <section className="space-y-5">
         <div className="flex items-center justify-between border-b border-border pb-4">
           <div className="space-y-1">
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
               Inventory
             </p>
-            <h2 className="text-xl font-bold uppercase tracking-tight">
-              Managed Repositories
-            </h2>
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="text-xl font-bold uppercase tracking-tight">
+                Managed Repositories
+              </h2>
+              <Badge className="rounded-none border-border bg-card px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-foreground hover:bg-card">
+                {projectCount} {projectCount === 1 ? "Project" : "Projects"}
+              </Badge>
+            </div>
           </div>
           <Button
             asChild
