@@ -5,12 +5,16 @@ import { ChevronLeft, ExternalLink } from "lucide-react";
 
 import { AppShell } from "~/components/app-shell";
 import { IssueChatWorkspace } from "~/components/issue-chat-workspace";
+import { IssueChangePreviewModal } from "~/components/issue-change-preview-modal";
 import { IssueDetailsModal } from "~/components/issue-details-modal";
 import { type AIChatMessage } from "~/components/ui/ai-chat";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
 import { getAuth } from "~/server/auth/session";
-import { buildIssueChatDiffPreview } from "~/lib/issue-chat-diff";
+import {
+  getIssueChatMessages,
+  getOrCreateIssueChatSession,
+} from "~/server/chat";
 import { fetchProjectIssue } from "~/server/github/issues";
 import { readPendingProjectEdit } from "~/server/github/pending-edit-session";
 import { readPostCommitResult } from "~/server/github/post-commit-session";
@@ -27,29 +31,24 @@ function getStatusMessage(
   success: string | undefined,
 ): AIChatMessage | null {
   if (success) {
-    const successCopy: Record<string, Pick<AIChatMessage, "body" | "title" | "tone">> = {
+    const successCopy: Record<string, Pick<AIChatMessage, "body" | "tone">> = {
       edit_prepared: {
-        title: "Draft prepared",
         body: "The chat workspace has a staged edit ready. Review the summary below, then move to branch + commit when it looks right.",
         tone: "success",
       },
       edit_cleared: {
-        title: "Draft cleared",
         body: "The staged edit was removed from this issue thread. You can prepare a fresh change whenever you're ready.",
         tone: "warning",
       },
       commit_created: {
-        title: "Commit recorded",
         body: "The branch and commit are live on GitHub. The next step is opening the pull request from this same workspace.",
         tone: "success",
       },
       pr_created: {
-        title: "Pull request opened",
-        body: "The issue workflow made it all the way to a live PR. You can open it from the message thread below.",
+        body: "The issue workflow made it all the way to a live PR. You can open it from the workflow controls below.",
         tone: "success",
       },
       pr_already_exists: {
-        title: "Pull request already exists",
         body: "This branch already has an open PR, so the workspace is now showing that existing review thread instead of creating another one.",
         tone: "warning",
       },
@@ -67,104 +66,88 @@ function getStatusMessage(
   }
 
   if (error) {
-    const errorCopy: Record<string, Pick<AIChatMessage, "body" | "title" | "tone">> = {
+    const errorCopy: Record<string, Pick<AIChatMessage, "body" | "tone">> = {
       missing_file_path: {
-        title: "File path missing",
         body: "Add the repository file path in the file section before asking Devin to prepare the edit.",
         tone: "error",
       },
       missing_instruction: {
-        title: "Instruction missing",
         body: "The composer needs an instruction before it can prepare the change for this issue.",
         tone: "error",
       },
       file_not_found: {
-        title: "File not found",
         body: "That file path does not exist in this repository. Try an exact path from GitHub and prepare again.",
         tone: "error",
       },
       unsupported_file: {
-        title: "Unsupported file",
         body: "This MVP can only prepare text-based file changes right now. Pick a plain text source file and try again.",
         tone: "error",
       },
       edit_access_missing: {
-        title: "Repository access missing",
         body: "GitHub access for this repository is missing or expired, so the edit cannot be prepared from this workspace yet.",
         tone: "error",
       },
       issue_unavailable: {
-        title: "Issue unavailable",
         body: "The issue details could not be loaded from GitHub right now, so the workspace is paused until that recovers.",
         tone: "error",
       },
       edit_ai_unavailable: {
-        title: "Edit model unavailable",
         body: "The edit preparation service is not configured right now, so the chat can show the workflow but cannot stage a new change yet.",
         tone: "error",
       },
       edit_no_changes: {
-        title: "No change generated",
         body: "The prepared result matched the current file, so there was nothing new to stage. Tighten the instruction and try again.",
         tone: "warning",
       },
       edit_invalid_response: {
-        title: "Invalid edit response",
         body: "The generated edit came back in an unusable format. Try the request again with a simpler instruction.",
         tone: "error",
       },
       edit_generation_failed: {
-        title: "Edit generation failed",
         body: "The model failed while preparing the change. The workspace is still intact, and you can retry from the composer.",
         tone: "error",
       },
+      chat_persist_failed: {
+        body: "The edit was prepared, but the chat could not be saved. Retry once so the conversation history stays durable.",
+        tone: "error",
+      },
       edit_prepare_failed: {
-        title: "Edit preparation failed",
         body: "The edit could not be staged for this issue. Retry once, and if it persists we can narrow the target file further.",
         tone: "error",
       },
       pending_edit_missing: {
-        title: "Draft missing",
         body: "There is no staged edit attached to this issue yet, so a commit cannot be created. Prepare the edit first.",
         tone: "error",
       },
       stale_pending_edit: {
-        title: "Draft belongs to another issue",
         body: "A staged edit exists, but it belongs to a different issue thread. Clear it or prepare a new one here.",
         tone: "warning",
       },
       commit_access_missing: {
-        title: "Commit blocked by access",
         body: "GitHub would not accept the branch + commit request for this repository. Check app access on GitHub, then retry.",
         tone: "error",
       },
       commit_branch_conflict: {
-        title: "Branch conflict",
         body: "GitHub could not create or reuse the issue branch. Check whether the branch name is blocked or in an unusual state, then retry.",
         tone: "error",
       },
       commit_failed: {
-        title: "Commit failed",
         body: "The staged change was ready, but GitHub rejected the commit step. The server log now includes the GitHub rejection message.",
         tone: "error",
       },
       commit_file_conflict: {
-        title: "File changed on branch",
         body: "The issue branch changed while this commit was being written. Prepare the edit again so it can use the newest branch file.",
         tone: "error",
       },
       post_commit_missing: {
-        title: "Nothing to open as PR yet",
         body: "This issue does not have a recorded branch + commit result in session, so the pull request step has nothing to use.",
         tone: "error",
       },
       pr_access_missing: {
-        title: "Pull request blocked by access",
         body: "GitHub app access is missing for this repository, so the PR could not be opened from the issue workspace.",
         tone: "error",
       },
       pr_create_failed: {
-        title: "Pull request failed",
         body: "The branch exists, but GitHub would not create the pull request right now. Retry from this same issue thread.",
         tone: "error",
       },
@@ -279,58 +262,34 @@ async function IssueWorkspaceSection({
     readPullRequestResult(project.id, issueNumber),
   ]);
 
-  const messages: AIChatMessage[] = [];
+  const chatSession = await getOrCreateIssueChatSession({
+    issueNumber,
+    projectId: project.id,
+    title: issueTitle,
+    userId: project.userId,
+  });
+  const persistedMessages = await getIssueChatMessages(chatSession.id);
+  const messages: AIChatMessage[] = [...persistedMessages];
   const statusMessage = getStatusMessage(error, success);
 
   if (statusMessage) {
-    messages.push(statusMessage);
-  }
-
-  if (pendingEdit) {
-    messages.push({
-      body: pendingEdit.userInstruction,
-      id: "pending-edit-user",
-      meta: `Issue #${issueNumber} • ${pendingEdit.filePath}`,
-      role: "user",
-      title: "You",
-    });
-    messages.push({
-      body: pendingEdit.summary,
-      diff: buildIssueChatDiffPreview(
-        pendingEdit.filePath,
-        pendingEdit.summary,
-        pendingEdit.originalContent,
-        pendingEdit.updatedContent,
-      ),
-      id: "pending-edit",
-      kind: "diff",
-      meta: `Prepared with ${pendingEdit.model}`,
-      role: "assistant",
-      title: `Draft ready for ${pendingEdit.filePath}`,
-      tone: "success",
-    });
+    messages.unshift(statusMessage);
   }
 
   if (postCommit) {
     messages.push({
+      body: `The staged change is now on branch ${postCommit.branchName} for ${postCommit.filePath}.\n\nCommit ${postCommit.commitSha.slice(0, 7)}`,
       id: "post-commit",
       role: "assistant",
-      title: "Branch + commit created",
-      body: `The staged change is now on branch ${postCommit.branchName} for ${postCommit.filePath}.`,
-      meta: `Commit ${postCommit.commitSha.slice(0, 7)}`,
       tone: "success",
     });
   }
 
   if (pullRequest) {
     messages.push({
+      body: `PR #${pullRequest.prNumber} is now open for branch ${pullRequest.branchName}.`,
       id: "pull-request",
       role: "assistant",
-      title: "Pull request ready",
-      body: `PR #${pullRequest.prNumber} is now open for branch ${pullRequest.branchName}.`,
-      actionHref: pullRequest.prUrl,
-      actionLabel: "Open Pull Request",
-      meta: "GitHub review thread is live",
       tone: "success",
     });
   }
@@ -348,16 +307,27 @@ async function IssueWorkspaceSection({
           {issueTitle}
         </h1>
 
-        <IssueDetailsModal
-          author={issueResult.status === "ok" ? issueResult.issue.author : undefined}
-          body={issueResult.status === "ok" ? issueResult.issue.body : null}
-          comments={issueResult.status === "ok" ? issueResult.issue.comments : undefined}
-          createdAt={issueResult.status === "ok" ? issueResult.issue.createdAt : undefined}
-          issueNumber={issueNumber}
-          state={issueResult.status === "ok" ? issueResult.issue.state : undefined}
-          title={issueTitle}
-          updatedAt={issueResult.status === "ok" ? issueResult.issue.updatedAt : undefined}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          {process.env.NODE_ENV === "development" ? (
+            <IssueChangePreviewModal
+              filePath={pendingEdit?.filePath}
+              model={pendingEdit?.model}
+              originalContent={pendingEdit?.originalContent}
+              summary={pendingEdit?.summary}
+              updatedContent={pendingEdit?.updatedContent}
+            />
+          ) : null}
+          <IssueDetailsModal
+            author={issueResult.status === "ok" ? issueResult.issue.author : undefined}
+            body={issueResult.status === "ok" ? issueResult.issue.body : null}
+            comments={issueResult.status === "ok" ? issueResult.issue.comments : undefined}
+            createdAt={issueResult.status === "ok" ? issueResult.issue.createdAt : undefined}
+            issueNumber={issueNumber}
+            state={issueResult.status === "ok" ? issueResult.issue.state : undefined}
+            title={issueTitle}
+            updatedAt={issueResult.status === "ok" ? issueResult.issue.updatedAt : undefined}
+          />
+        </div>
       </div>
 
       <IssueChatWorkspace

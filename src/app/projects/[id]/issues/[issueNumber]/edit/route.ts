@@ -1,6 +1,10 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
+import {
+  appendIssueChatMessages,
+  getOrCreateIssueChatSession,
+} from "~/server/chat";
 import { revalidateProjectGitHubReads } from "~/server/github/cache";
 import { prepareSingleFileAiEdit } from "~/server/github/contents";
 import { clearPostCommitResult } from "~/server/github/post-commit-session";
@@ -264,6 +268,41 @@ async function handlePrepareEdit(request: Request, context: EditRouteContext) {
     );
   }
 
+  let chatMessages: Awaited<ReturnType<typeof appendIssueChatMessages>>;
+
+  try {
+    const chatSession = await getOrCreateIssueChatSession({
+      issueNumber,
+      projectId: project.id,
+      title: issueResult.issue.title,
+      userId,
+    });
+
+    chatMessages = await appendIssueChatMessages(chatSession.id, [
+      {
+        body: `${instruction}\n\nIssue #${issueNumber} · ${preparedEdit.filePath}`,
+        role: "user",
+      },
+      {
+        body: `Prepared edit for ${preparedEdit.filePath}.\n\n${preparedEdit.summary}`,
+        role: "assistant",
+        tone: "success",
+      },
+    ]);
+  } catch {
+    if (requestExpectsJson) {
+      return jsonError("chat_persist_failed", 500);
+    }
+
+    return redirectToIssueWithStatus(
+      request,
+      project.id,
+      issueNumber,
+      "error",
+      "chat_persist_failed",
+    );
+  }
+
   await clearPostCommitResult(project.id, issueNumber);
   await writePendingProjectEdit({
     filePath: preparedEdit.filePath,
@@ -295,6 +334,7 @@ async function handlePrepareEdit(request: Request, context: EditRouteContext) {
         updatedContent: preparedEdit.updatedContent,
         userInstruction: instruction,
       },
+      messages: chatMessages,
       status: "ok" as const,
     });
   }

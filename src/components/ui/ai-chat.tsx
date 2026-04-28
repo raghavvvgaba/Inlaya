@@ -1,28 +1,13 @@
 import type { ReactNode } from "react";
-import { Bot, CheckCircle2, ExternalLink, Sparkles, TriangleAlert, User2 } from "lucide-react";
+import { Bot, CheckCircle2, Sparkles, TriangleAlert, User2 } from "lucide-react";
 
-import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 
-export type AIChatDiffPreview = {
-  addedLines: string[];
-  contextAfter: string[];
-  contextBefore: string[];
-  filePath: string;
-  removedLines: string[];
-  summary: string;
-};
-
 export type AIChatMessage = {
-  actionHref?: string;
-  actionLabel?: string;
   body: string;
-  diff?: AIChatDiffPreview;
   id: string;
-  kind?: "diff" | "text" | "thinking";
-  meta?: string;
+  isThinking?: boolean;
   role: "assistant" | "system" | "user";
-  title: string;
   tone?: "default" | "error" | "success" | "warning";
 };
 
@@ -46,6 +31,30 @@ const toneIcons: Record<NonNullable<AIChatMessage["tone"]>, React.ReactNode> = {
   warning: <TriangleAlert className="h-3.5 w-3.5" />,
   error: <TriangleAlert className="h-3.5 w-3.5" />,
 };
+
+function getMessageLabel(message: AIChatMessage) {
+  if (message.isThinking) {
+    return "Preparing edit";
+  }
+
+  if (message.role === "user") {
+    return "You";
+  }
+
+  if (message.role === "assistant") {
+    return "Devin";
+  }
+
+  if (message.tone === "error") {
+    return "Error";
+  }
+
+  if (message.tone === "warning") {
+    return "Notice";
+  }
+
+  return "System";
+}
 
 export function AIChat({
   children,
@@ -120,7 +129,7 @@ export function AIChat({
                             isUser ? "text-black/55" : "text-white/55",
                           )}
                         >
-                          {message.title}
+                          {getMessageLabel(message)}
                         </p>
                       </div>
                       <p
@@ -129,7 +138,7 @@ export function AIChat({
                           isUser ? "text-black/90" : "text-white/90",
                         )}
                       >
-                        {message.kind === "thinking" ? (
+                        {message.isThinking ? (
                           <span className="flex items-center gap-2">
                             <span>{message.body}</span>
                             <span className="flex items-center gap-1">
@@ -144,96 +153,6 @@ export function AIChat({
                       </p>
                     </div>
                   </div>
-
-                  {message.diff ? (
-                    <div className="mt-4 overflow-hidden rounded-[1.35rem] border border-white/10 bg-black/30">
-                      <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
-                        <div>
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-                            {message.diff.filePath}
-                          </p>
-                          <p className="mt-1 text-sm text-white/80">
-                            {message.diff.summary}
-                          </p>
-                        </div>
-                        <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-100">
-                          Prepared Diff
-                        </span>
-                      </div>
-
-                      <div className="overflow-x-auto px-4 py-3 font-mono text-xs leading-6">
-                        {message.diff.contextBefore.map((line, index) => (
-                          <div
-                            key={`before-${index}`}
-                            className="grid grid-cols-[2rem_1fr] gap-3 text-white/45"
-                          >
-                            <span> </span>
-                            <span>{line || " "}</span>
-                          </div>
-                        ))}
-
-                        {message.diff.removedLines.map((line, index) => (
-                          <div
-                            key={`removed-${index}`}
-                            className="grid grid-cols-[2rem_1fr] gap-3 bg-red-500/10 text-red-100"
-                          >
-                            <span className="text-center">-</span>
-                            <span>{line || " "}</span>
-                          </div>
-                        ))}
-
-                        {message.diff.addedLines.map((line, index) => (
-                          <div
-                            key={`added-${index}`}
-                            className="grid grid-cols-[2rem_1fr] gap-3 bg-emerald-500/10 text-emerald-100"
-                          >
-                            <span className="text-center">+</span>
-                            <span>{line || " "}</span>
-                          </div>
-                        ))}
-
-                        {message.diff.contextAfter.map((line, index) => (
-                          <div
-                            key={`after-${index}`}
-                            className="grid grid-cols-[2rem_1fr] gap-3 text-white/45"
-                          >
-                            <span> </span>
-                            <span>{line || " "}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {message.meta ? (
-                    <p
-                      className={cn(
-                        "mt-3 text-[11px] uppercase tracking-[0.18em]",
-                        isUser ? "text-black/45" : "text-white/45",
-                      )}
-                    >
-                      {message.meta}
-                    </p>
-                  ) : null}
-
-                  {message.actionHref && message.actionLabel ? (
-                    <div className="mt-4">
-                      <Button
-                        asChild
-                        size="sm"
-                        variant={isUser ? "secondary" : "outline"}
-                        className={cn(
-                          "rounded-full border-white/10",
-                          !isUser && "bg-transparent text-white hover:bg-white/10",
-                        )}
-                      >
-                        <a href={message.actionHref} rel="noreferrer" target="_blank">
-                          {message.actionLabel}
-                          <ExternalLink className="h-3.5 w-3.5" />
-                        </a>
-                      </Button>
-                    </div>
-                  ) : null}
                 </div>
               </article>
             );
