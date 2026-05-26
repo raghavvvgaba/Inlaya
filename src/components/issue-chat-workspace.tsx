@@ -26,6 +26,7 @@ type IssueChatWorkspaceProps = {
   issueNumber: number;
   pendingEdit: PendingEditSeed | null;
   postCommitExists: boolean;
+  projectId: string;
   pullRequestAction: string;
   pullRequestExists: boolean;
   pullRequestUrl?: string;
@@ -57,7 +58,7 @@ function getClientErrorMessage(code: string): AIChatMessage {
       tone: "error",
     },
     file_not_found: {
-      body: "That file path does not exist in the repository. Try an exact path from GitHub.",
+      body: "That file path does not exist in the sandboxed repository. Try an exact repo-relative path.",
       tone: "error",
     },
     unsupported_file: {
@@ -76,6 +77,10 @@ function getClientErrorMessage(code: string): AIChatMessage {
       body: "The AI edit service is not configured right now, so no draft could be produced.",
       tone: "error",
     },
+    invalid_path: {
+      body: "Use a repo-relative file path inside the sandboxed repository.",
+      tone: "error",
+    },
     edit_no_changes: {
       body: "The generated edit matched the current file. Tighten the instruction and try again.",
       tone: "warning",
@@ -84,8 +89,28 @@ function getClientErrorMessage(code: string): AIChatMessage {
       body: "The generated edit came back in an unusable format. Try once more with a simpler request.",
       tone: "error",
     },
+    edit_provider_rejected_request: {
+      body: "The AI provider rejected this edit request. The server log now includes the OpenRouter response details so we can see which parameter or model constraint caused it.",
+      tone: "error",
+    },
+    edit_rate_limited: {
+      body: "OpenRouter rate limited this edit request. Give it a moment and retry from the same chat thread.",
+      tone: "warning",
+    },
     edit_generation_failed: {
       body: "The model failed while preparing the edit. You can retry from this same chat thread.",
+      tone: "error",
+    },
+    missing_session_id: {
+      body: "Start the sandbox first so Devin has a live workspace to edit.",
+      tone: "error",
+    },
+    sandbox_not_running: {
+      body: "The sandbox is not running right now. Start it again, then retry the edit.",
+      tone: "error",
+    },
+    session_not_found: {
+      body: "This sandbox session is no longer available. Start a fresh sandbox and retry the edit.",
       tone: "error",
     },
     chat_persist_failed: {
@@ -115,6 +140,7 @@ export function IssueChatWorkspace({
   issueNumber,
   pendingEdit,
   postCommitExists,
+  projectId,
   pullRequestAction,
   pullRequestExists,
   pullRequestUrl,
@@ -137,11 +163,42 @@ export function IssueChatWorkspace({
     [],
   );
 
+  const storageKey = useMemo(
+    () => `devin:sandbox:${projectId}:${issueNumber}`,
+    [issueNumber, projectId],
+  );
+
+  function getSandboxSessionId() {
+    try {
+      const savedValue = window.localStorage.getItem(storageKey);
+
+      if (!savedValue) {
+        return null;
+      }
+
+      const saved = JSON.parse(savedValue) as { sessionId?: unknown };
+      return typeof saved.sessionId === "string" && saved.sessionId.trim()
+        ? saved.sessionId.trim()
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
   async function handlePrepareEdit() {
     const trimmedFilePath = filePath.trim();
     const trimmedInstruction = instruction.trim();
+    const sessionId = getSandboxSessionId();
 
     if (!trimmedFilePath || !trimmedInstruction || accessBlocked || isPreparing) {
+      return;
+    }
+
+    if (!sessionId) {
+      setMessages((current) => [
+        ...current,
+        getClientErrorMessage("missing_session_id"),
+      ]);
       return;
     }
 
@@ -159,6 +216,7 @@ export function IssueChatWorkspace({
         body: JSON.stringify({
           filePath: trimmedFilePath,
           instruction: trimmedInstruction,
+          sessionId,
         }),
         headers: {
           Accept: "application/json",
@@ -202,7 +260,7 @@ export function IssueChatWorkspace({
 
   return (
     <AIChat
-      className="flex-1"
+      className="h-auto min-h-[32rem]"
       fullBleed
       messages={messages}
     >

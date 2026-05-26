@@ -20,7 +20,6 @@ export type PendingProjectEdit = {
   issueTitle: string;
   model: string;
   originalContent: string;
-  originalSha: string;
   projectId: string;
   repoName: string;
   repoOwner: string;

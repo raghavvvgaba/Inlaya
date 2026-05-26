@@ -77,7 +77,7 @@ function getStatusMessage(
         tone: "error",
       },
       file_not_found: {
-        body: "That file path does not exist in this repository. Try an exact path from GitHub and prepare again.",
+        body: "That file path does not exist in this sandboxed repository. Try an exact repo-relative path and prepare again.",
         tone: "error",
       },
       unsupported_file: {
@@ -96,6 +96,10 @@ function getStatusMessage(
         body: "The edit preparation service is not configured right now, so the chat can show the workflow but cannot stage a new change yet.",
         tone: "error",
       },
+      invalid_path: {
+        body: "Use a repository-relative file path inside the sandbox workspace, then prepare the edit again.",
+        tone: "error",
+      },
       edit_no_changes: {
         body: "The prepared result matched the current file, so there was nothing new to stage. Tighten the instruction and try again.",
         tone: "warning",
@@ -104,8 +108,28 @@ function getStatusMessage(
         body: "The generated edit came back in an unusable format. Try the request again with a simpler instruction.",
         tone: "error",
       },
+      edit_provider_rejected_request: {
+        body: "The AI provider rejected this edit request. The server log now includes the OpenRouter response details so we can see whether the model, structured-output settings, or another parameter caused it.",
+        tone: "error",
+      },
+      edit_rate_limited: {
+        body: "OpenRouter rate limited this edit request. Wait a moment, then retry from the same issue workspace.",
+        tone: "warning",
+      },
       edit_generation_failed: {
         body: "The model failed while preparing the change. The workspace is still intact, and you can retry from the composer.",
+        tone: "error",
+      },
+      missing_session_id: {
+        body: "Start the sandbox first so Devin has a live workspace to edit.",
+        tone: "error",
+      },
+      sandbox_not_running: {
+        body: "The sandbox is not running right now. Start it again, then retry the edit from this issue thread.",
+        tone: "error",
+      },
+      session_not_found: {
+        body: "This sandbox session is no longer available. Start a fresh sandbox and prepare the edit again.",
         tone: "error",
       },
       chat_persist_failed: {
@@ -183,8 +207,8 @@ export default async function ProjectIssuePage({
   }
 
   return (
-    <AppShell compactHeader contentWidth="full" description="" fullHeight title="Issue">
-      <section className="flex min-h-0 flex-1 flex-col">
+    <AppShell compactHeader contentWidth="full" description="" title="Issue">
+      <section>
         <div className="mb-6 space-y-5">
           <div className="flex items-start justify-between gap-4">
             <Button
@@ -296,11 +320,11 @@ async function IssueWorkspaceSection({
   }
 
   const accessBlocked = issueResult.status !== "ok";
-  const editAction = `/projects/${project.id}/issues/${issueNumber}/edit`;
   const commitAction = `/projects/${project.id}/issues/${issueNumber}/commit`;
   const cancelAction = `/projects/${project.id}/issues/${issueNumber}/edit/cancel`;
   const pullRequestAction = `/projects/${project.id}/issues/${issueNumber}/pull-request`;
   const sandboxBaseAction = `/projects/${project.id}/issues/${issueNumber}/sandbox`;
+  const editAction = `${sandboxBaseAction}/edit`;
 
   return (
     <>
@@ -335,14 +359,11 @@ async function IssueWorkspaceSection({
       <IssueSandboxStatusPanel
         heartbeatAction={`${sandboxBaseAction}/heartbeat`}
         issueNumber={issueNumber}
-        listFilesAction={`${sandboxBaseAction}/files/list`}
         projectId={project.id}
-        readFileAction={`${sandboxBaseAction}/files/read`}
         restartPreviewAction={`${sandboxBaseAction}/restart-preview`}
         sessionAction={`${sandboxBaseAction}/session`}
         startAction={`${sandboxBaseAction}/start`}
         stopAction={`${sandboxBaseAction}/stop`}
-        writeFileAction={`${sandboxBaseAction}/files/write`}
       />
 
       <IssueChatWorkspace
@@ -350,10 +371,10 @@ async function IssueWorkspaceSection({
         cancelAction={cancelAction}
         commitAction={commitAction}
         editAction={editAction}
-        initialFilePath={pendingEdit?.filePath ?? "README.md"}
+        initialFilePath={pendingEdit?.filePath ?? "src/pages/ProjectsPage.jsx"}
         initialInstruction={
           pendingEdit?.userInstruction ??
-          `Append "hello world" to the selected file for issue #${issueNumber}.`
+          "Currently this page renders all projects. Change it so that only the first two projects are rendered."
         }
         initialMessages={messages}
         issueNumber={issueNumber}
@@ -370,6 +391,7 @@ async function IssueWorkspaceSection({
             : null
         }
         postCommitExists={Boolean(postCommit)}
+        projectId={project.id}
         pullRequestAction={pullRequestAction}
         pullRequestExists={Boolean(pullRequest)}
         pullRequestUrl={pullRequest?.prUrl}
