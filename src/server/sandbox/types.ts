@@ -30,10 +30,58 @@ export type StartSandboxSessionInput = {
   repoOwner: string;
 };
 
+export type SandboxFileInput = {
+  path: string;
+  sessionId: string;
+};
+
+export type SandboxWriteFileInput = SandboxFileInput & {
+  content: string;
+};
+
+export type SandboxListFilesInput = {
+  path?: string;
+  sessionId: string;
+};
+
+export type SandboxCommandInput = {
+  command: string;
+  sessionId: string;
+};
+
+export type SandboxDiffInput = {
+  sessionId: string;
+};
+
+export type SandboxFile = {
+  content: string;
+  path: string;
+  size: number;
+};
+
+export type SandboxFileEntry = {
+  path: string;
+  name: string;
+  type: "file" | "dir" | "unknown";
+  size?: number;
+};
+
+export type SandboxCommandResult = {
+  command: string;
+  exitCode?: number;
+  stderr: string;
+  stdout: string;
+};
+
 export type SandboxProvider = {
+  getDiff: (input: SandboxDiffInput) => Promise<string>;
   get: (sessionId: string) => SandboxSession | null;
   heartbeat: (sessionId: string) => SandboxSession | null;
+  listFiles: (input: SandboxListFilesInput) => Promise<SandboxFileEntry[]>;
+  readFile: (input: SandboxFileInput) => Promise<SandboxFile>;
   restartPreview: (sessionId: string) => Promise<SandboxSession>;
+  runCommand: (input: SandboxCommandInput) => Promise<SandboxCommandResult>;
   start: (input: StartSandboxSessionInput) => Promise<SandboxSession>;
   stop: (input: StopSandboxSessionInput) => Promise<SandboxSession>;
+  writeFile: (input: SandboxWriteFileInput) => Promise<{ path: string; session: SandboxSession }>;
 };

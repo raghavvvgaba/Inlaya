@@ -6,13 +6,29 @@ import { env } from "~/env";
 import { getRepoInstallationAccessToken } from "~/server/github/app-auth";
 import type {
   PreviewState,
+  SandboxCommandInput,
+  SandboxCommandResult,
+  SandboxDiffInput,
+  SandboxFile,
+  SandboxFileEntry,
+  SandboxFileInput,
+  SandboxListFilesInput,
   SandboxProvider,
   SandboxSession as PublicSandboxSession,
   SandboxStatus,
   StartSandboxSessionInput,
   StartupStage,
   StopSandboxSessionInput,
+  SandboxWriteFileInput,
 } from "~/server/sandbox/types";
+import { normalizeSandboxCommand } from "~/server/sandbox/tools/commands";
+import { SANDBOX_DIFF_COMMAND } from "~/server/sandbox/tools/diff";
+import { assertSandboxFileContentSize } from "~/server/sandbox/tools/files";
+import {
+  normalizeSandboxRelativePath,
+  shouldHideSandboxEntry,
+  toSandboxRepoPath,
+} from "~/server/sandbox/tools/paths";
 
 type SandboxCtor = typeof import("e2b").Sandbox;
 
@@ -1004,6 +1020,120 @@ function heartbeatSandboxSession(sessionId: string) {
   return publicSession(session);
 }
 
+function getRunningToolSession(sessionId: string) {
+  const session = recordSessionHeartbeat(sessionId);
+
+  if (!session?.sandbox) {
+    throw new Error("Session not found.");
+  }
+
+  if (session.status !== "running") {
+    throw new Error("Sandbox is not running.");
+  }
+
+  return session;
+}
+
+async function readSandboxFile(input: SandboxFileInput): Promise<SandboxFile> {
+  const session = getRunningToolSession(input.sessionId);
+  const relativePath = normalizeSandboxRelativePath(input.path);
+  const sandboxPath = toSandboxRepoPath(relativePath);
+  const content = await session.sandbox!.files.read(sandboxPath, { requestTimeoutMs: 10_000 });
+
+  return {
+    content,
+    path: relativePath,
+    size: Buffer.byteLength(content, "utf8"),
+  };
+}
+
+async function writeSandboxFile(input: SandboxWriteFileInput) {
+  const session = getRunningToolSession(input.sessionId);
+  const relativePath = normalizeSandboxRelativePath(input.path);
+  const sandboxPath = toSandboxRepoPath(relativePath);
+  assertSandboxFileContentSize(input.content);
+
+  await session.sandbox!.files.write(sandboxPath, input.content, { requestTimeoutMs: 15_000 });
+  appendLog(session, `\nWrote ${relativePath}\n`);
+
+  setPreviewState(session, "recovering", "Saving change and refreshing preview.");
+  await recoverPreviewAfterEdit(session);
+
+  return {
+    path: relativePath,
+    session: publicSession(session),
+  };
+}
+
+async function listSandboxFiles(input: SandboxListFilesInput): Promise<SandboxFileEntry[]> {
+  const session = getRunningToolSession(input.sessionId);
+  const relativePath = normalizeSandboxRelativePath(input.path, { allowRoot: true });
+  const sandboxPath = toSandboxRepoPath(relativePath);
+  const entries = await session.sandbox!.files.list(sandboxPath, { requestTimeoutMs: 10_000 });
+
+  return entries
+    .filter((entry) => !shouldHideSandboxEntry(entry.name))
+    .map((entry) => {
+      const entryPath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
+      const type = String(entry.type ?? "unknown");
+
+      return {
+        name: entry.name,
+        path: entryPath,
+        size: entry.size,
+        type: type === "dir" || type === "file" ? type : "unknown",
+      };
+    });
+}
+
+async function runSandboxCommand(input: SandboxCommandInput): Promise<SandboxCommandResult> {
+  const session = getRunningToolSession(input.sessionId);
+  const command = normalizeSandboxCommand(input.command);
+
+  appendLog(session, `\n$ ${command}\n`);
+
+  try {
+    const result = await session.sandbox!.commands.run(command, {
+      cwd: PROJECT_DIR,
+      timeoutMs: 30_000,
+      onStdout: (data: string) => appendLog(session, data),
+      onStderr: (data: string) => appendLog(session, data),
+    });
+
+    return {
+      command,
+      exitCode: result.exitCode,
+      stderr: result.stderr,
+      stdout: result.stdout,
+    };
+  } catch (error) {
+    const stdout = error instanceof Error && "stdout" in error && typeof error.stdout === "string" ? error.stdout : "";
+    const stderr = error instanceof Error && "stderr" in error && typeof error.stderr === "string" ? error.stderr : "";
+    const exitCode =
+      error instanceof Error && "exitCode" in error && typeof error.exitCode === "number" ? error.exitCode : undefined;
+
+    if (!stdout && !stderr) {
+      throw error;
+    }
+
+    return {
+      command,
+      exitCode,
+      stderr,
+      stdout,
+    };
+  }
+}
+
+async function getSandboxDiff(input: SandboxDiffInput) {
+  const result = await runSandboxCommand({
+    command: SANDBOX_DIFF_COMMAND,
+    sessionId: input.sessionId,
+  });
+
+  return result.stdout;
+}
+
 export async function restoreSandboxSession({ sessionId, sandboxId }: RestoreSessionInput) {
   requireApiKey();
 
@@ -1208,10 +1338,15 @@ async function restartSandboxPreview(sessionId: string) {
 
 export const e2bSandboxProvider: SandboxProvider = {
   get: getSandboxSession,
+  getDiff: getSandboxDiff,
   heartbeat: heartbeatSandboxSession,
+  listFiles: listSandboxFiles,
+  readFile: readSandboxFile,
   restartPreview: restartSandboxPreview,
+  runCommand: runSandboxCommand,
   start: createSandboxSession,
   stop: stopSandboxSession,
+  writeFile: writeSandboxFile,
 };
 
 async function recoverPreviewAfterEdit(session: E2BSandboxSession) {

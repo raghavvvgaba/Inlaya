@@ -4,6 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 import { getOwnedProject } from "~/server/projects";
+import { canAccessIssueSandbox } from "~/server/sandbox/ownership";
 
 export type IssueSandboxRouteContext = {
   params: Promise<{ id: string; issueNumber: string }>;
@@ -19,6 +20,18 @@ export function sandboxJson<T>(data: T, init?: ResponseInit) {
 
 export function sandboxError(error: string, status = 400) {
   return sandboxJson({ ok: false as const, error }, { status });
+}
+
+export function sandboxToolError(error: unknown, fallback: string) {
+  const message = error instanceof Error ? error.message : fallback;
+  const badRequestErrors = new Set([
+    "command_not_allowed",
+    "file_too_large",
+    "invalid_path",
+    "missing_path",
+  ]);
+
+  return sandboxError(message, badRequestErrors.has(message) ? 400 : 500);
 }
 
 export async function getOwnedIssueProject(
@@ -99,4 +112,33 @@ export function readStringField(
 ) {
   const value = body?.[field];
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+export function readOptionalStringField(
+  body: Record<string, unknown> | null,
+  field: string,
+) {
+  const value = body?.[field];
+  return typeof value === "string" ? value : null;
+}
+
+export function readRequiredStringValue(
+  body: Record<string, unknown> | null,
+  field: string,
+) {
+  const value = body?.[field];
+  return typeof value === "string" ? value : null;
+}
+
+export function verifyIssueSandboxAccess(input: {
+  issueNumber: number;
+  projectId: string;
+  sessionId: string;
+  userId: string;
+}) {
+  return canAccessIssueSandbox(input.sessionId, {
+    issueNumber: input.issueNumber,
+    projectId: input.projectId,
+    userId: input.userId,
+  });
 }

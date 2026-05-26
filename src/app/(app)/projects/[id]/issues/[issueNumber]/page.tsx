@@ -335,11 +335,14 @@ async function IssueWorkspaceSection({
       <IssueSandboxStatusPanel
         heartbeatAction={`${sandboxBaseAction}/heartbeat`}
         issueNumber={issueNumber}
+        listFilesAction={`${sandboxBaseAction}/files/list`}
         projectId={project.id}
+        readFileAction={`${sandboxBaseAction}/files/read`}
         restartPreviewAction={`${sandboxBaseAction}/restart-preview`}
         sessionAction={`${sandboxBaseAction}/session`}
         startAction={`${sandboxBaseAction}/start`}
         stopAction={`${sandboxBaseAction}/stop`}
+        writeFileAction={`${sandboxBaseAction}/files/write`}
       />
 
       <IssueChatWorkspace
