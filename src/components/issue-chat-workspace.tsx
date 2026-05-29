@@ -6,36 +6,20 @@ import { useMemo, useState } from "react";
 import { AIChat, type AIChatMessage } from "~/components/ui/ai-chat";
 import { ChatInputBox } from "~/components/ui/chat-input-box";
 
-type PendingEditSeed = {
-  filePath: string;
-  model: string;
-  originalContent: string;
-  summary: string;
-  updatedContent: string;
-  userInstruction: string;
-};
-
 type IssueChatWorkspaceProps = {
   accessBlocked: boolean;
-  cancelAction: string;
-  commitAction: string;
   editAction: string;
   initialFilePath: string;
   initialInstruction: string;
   initialMessages: AIChatMessage[];
   issueNumber: number;
-  pendingEdit: PendingEditSeed | null;
-  postCommitExists: boolean;
   projectId: string;
-  pullRequestAction: string;
-  pullRequestExists: boolean;
-  pullRequestUrl?: string;
 };
 
 type EditResponse =
   | {
+      filePath: string;
       messages: AIChatMessage[];
-      pendingEdit: PendingEditSeed;
       status: "ok";
     }
   | {
@@ -131,26 +115,18 @@ function getClientErrorMessage(code: string): AIChatMessage {
 
 export function IssueChatWorkspace({
   accessBlocked,
-  cancelAction,
-  commitAction,
   editAction,
   initialFilePath,
   initialInstruction,
   initialMessages,
   issueNumber,
-  pendingEdit,
-  postCommitExists,
   projectId,
-  pullRequestAction,
-  pullRequestExists,
-  pullRequestUrl,
 }: IssueChatWorkspaceProps) {
   const router = useRouter();
   const [messages, setMessages] = useState(initialMessages);
   const [filePath, setFilePath] = useState(initialFilePath);
   const [instruction, setInstruction] = useState(initialInstruction);
   const [isPreparing, setIsPreparing] = useState(false);
-  const [hasPendingEdit, setHasPendingEdit] = useState(Boolean(pendingEdit));
 
   const thinkingMessage = useMemo<AIChatMessage>(
     () => ({
@@ -237,9 +213,8 @@ export function IssueChatWorkspace({
         return;
       }
 
-      setHasPendingEdit(true);
-      setFilePath(result.pendingEdit.filePath);
-      setInstruction(result.pendingEdit.userInstruction);
+      setFilePath(result.filePath);
+      setInstruction(trimmedInstruction);
       setMessages((current) => [
         ...current.filter(
           (message) =>
@@ -266,19 +241,12 @@ export function IssueChatWorkspace({
     >
       <ChatInputBox
         accessBlocked={accessBlocked}
-        cancelAction={cancelAction}
-        commitAction={commitAction}
         filePath={filePath}
-        hasPendingEdit={hasPendingEdit}
         instruction={instruction}
         isPreparing={isPreparing}
         onFilePathChange={setFilePath}
         onInstructionChange={setInstruction}
         onPrepareEdit={handlePrepareEdit}
-        postCommitExists={postCommitExists}
-        pullRequestAction={pullRequestAction}
-        pullRequestExists={pullRequestExists}
-        pullRequestUrl={pullRequestUrl}
       />
     </AIChat>
   );

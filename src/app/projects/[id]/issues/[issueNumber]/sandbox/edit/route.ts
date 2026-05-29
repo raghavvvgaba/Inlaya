@@ -5,8 +5,6 @@ import {
   getOrCreateIssueChatSession,
 } from "~/server/chat";
 import { revalidateProjectGitHubReads } from "~/server/github/cache";
-import { clearPostCommitResult } from "~/server/github/post-commit-session";
-import { writePendingProjectEdit } from "~/server/github/pending-edit-session";
 import { fetchProjectIssue } from "~/server/github/issues";
 import {
   getOwnedIssueProject,
@@ -271,20 +269,6 @@ async function handlePrepareEdit(
         );
   }
 
-  await clearPostCommitResult(access.project.id, access.issueNumber);
-  await writePendingProjectEdit({
-    filePath: preparedEdit.filePath,
-    issueNumber: access.issueNumber,
-    issueTitle: issueResult.issue.title,
-    model: preparedEdit.model,
-    originalContent: preparedEdit.originalContent,
-    projectId: access.project.id,
-    repoName: access.project.repoName,
-    repoOwner: access.project.repoOwner,
-    summary: preparedEdit.summary,
-    updatedContent: preparedEdit.updatedContent,
-    userInstruction: instruction,
-  });
   revalidateProjectGitHubReads({
     issueNumber: access.issueNumber,
     repoName: access.project.repoName,
@@ -294,14 +278,7 @@ async function handlePrepareEdit(
   if (requestExpectsJson) {
     return NextResponse.json({
       diff: preparedEdit.diff,
-      pendingEdit: {
-        filePath: preparedEdit.filePath,
-        model: preparedEdit.model,
-        originalContent: preparedEdit.originalContent,
-        summary: preparedEdit.summary,
-        updatedContent: preparedEdit.updatedContent,
-        userInstruction: instruction,
-      },
+      filePath: preparedEdit.filePath,
       messages: chatMessages,
       session: preparedEdit.session,
       status: "ok" as const,
