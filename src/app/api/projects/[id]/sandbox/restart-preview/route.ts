@@ -1,12 +1,13 @@
 import {
-  getOwnedSandboxProject,
   readJsonObject,
   readStringField,
   sandboxError,
+  respondWithSandboxAction,
   sandboxJson,
   type ProjectSandboxRouteContext,
+  validateProjectSandboxSession,
+  withOwnedProjectSandboxRoute,
 } from "~/server/sandbox/route-helpers";
-import { canAccessProjectSandbox } from "~/server/sandbox/ownership";
 import { sandboxProvider } from "~/server/sandbox/provider";
 
 export const runtime = "nodejs";
@@ -16,35 +17,23 @@ export async function POST(
   request: Request,
   context: ProjectSandboxRouteContext,
 ) {
-  const access = await getOwnedSandboxProject(request, context);
+  return withOwnedProjectSandboxRoute(request, context, async (access) => {
+    const body = await readJsonObject(request);
+    const sessionId = readStringField(body, "sessionId");
+    const sessionError = validateProjectSandboxSession(access, sessionId);
 
-  if ("response" in access) {
-    return access.response;
-  }
+    if (sessionError) {
+      return sessionError;
+    }
 
-  const body = await readJsonObject(request);
-  const sessionId = readStringField(body, "sessionId");
+    if (!sessionId) {
+      return sandboxError("missing_session_id");
+    }
 
-  if (!sessionId) {
-    return sandboxError("missing_session_id");
-  }
-
-  if (
-    !canAccessProjectSandbox(sessionId, {
-      projectId: access.project.id,
-      userId: access.userId,
-    })
-  ) {
-    return sandboxError("session_not_found", 404);
-  }
-
-  try {
-    const session = await sandboxProvider.restartPreview(sessionId);
-    return sandboxJson({ ok: true as const, session });
-  } catch (error) {
-    return sandboxError(
-      error instanceof Error ? error.message : "Unable to restart preview.",
-      500,
+    return respondWithSandboxAction(
+      () => sandboxProvider.restartPreview(sessionId),
+      (session) => sandboxJson({ ok: true as const, session }),
+      "Unable to restart preview.",
     );
-  }
+  });
 }

@@ -1,13 +1,13 @@
 import {
-  getOwnedIssueProject,
   readOptionalIntegerField,
   readJsonObject,
   readStringField,
   sandboxError,
   sandboxJson,
-  sandboxToolError,
+  respondWithSandboxToolAction,
   type IssueSandboxRouteContext,
-  verifyIssueSandboxAccess,
+  validateIssueSandboxSession,
+  withOwnedIssueSandboxRoute,
 } from "~/server/sandbox/route-helpers";
 import { sandboxProvider } from "~/server/sandbox/provider";
 
@@ -17,44 +17,38 @@ export async function POST(
   request: Request,
   context: IssueSandboxRouteContext,
 ) {
-  const access = await getOwnedIssueProject(request, context);
+  return withOwnedIssueSandboxRoute(request, context, async (access) => {
+    const body = await readJsonObject(request);
+    const sessionId = readStringField(body, "sessionId");
+    const path = readStringField(body, "path");
+    const startLine = readOptionalIntegerField(body, "startLine");
+    const endLine = readOptionalIntegerField(body, "endLine");
 
-  if ("response" in access) {
-    return access.response;
-  }
+    if (!path) return sandboxError("missing_path");
+    if (startLine === null || endLine === null) {
+      return sandboxError("invalid_line_range");
+    }
 
-  const body = await readJsonObject(request);
-  const sessionId = readStringField(body, "sessionId");
-  const path = readStringField(body, "path");
-  const startLine = readOptionalIntegerField(body, "startLine");
-  const endLine = readOptionalIntegerField(body, "endLine");
+    const sessionError = validateIssueSandboxSession(access, sessionId);
 
-  if (!sessionId) return sandboxError("missing_session_id");
-  if (!path) return sandboxError("missing_path");
-  if (startLine === null || endLine === null) {
-    return sandboxError("invalid_line_range");
-  }
+    if (sessionError) {
+      return sessionError;
+    }
 
-  if (
-    !verifyIssueSandboxAccess({
-      issueNumber: access.issueNumber,
-      projectId: access.project.id,
-      sessionId,
-      userId: access.userId,
-    })
-  ) {
-    return sandboxError("session_not_found", 404);
-  }
+    if (!sessionId) {
+      return sandboxError("missing_session_id");
+    }
 
-  try {
-    const file = await sandboxProvider.readFile({
-      endLine,
-      path,
-      sessionId,
-      startLine,
-    });
-    return sandboxJson({ ok: true as const, file });
-  } catch (error) {
-    return sandboxToolError(error, "Unable to read file.");
-  }
+    return respondWithSandboxToolAction(
+      () =>
+        sandboxProvider.readFile({
+          endLine,
+          path,
+          sessionId,
+          startLine,
+        }),
+      (file) => sandboxJson({ ok: true as const, file }),
+      "Unable to read file.",
+    );
+  });
 }

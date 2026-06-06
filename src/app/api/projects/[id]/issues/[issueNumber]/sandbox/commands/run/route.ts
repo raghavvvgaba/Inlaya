@@ -1,12 +1,12 @@
 import {
-  getOwnedIssueProject,
   readJsonObject,
   readStringField,
   sandboxError,
   sandboxJson,
-  sandboxToolError,
+  respondWithSandboxToolAction,
   type IssueSandboxRouteContext,
-  verifyIssueSandboxAccess,
+  validateIssueSandboxSession,
+  withOwnedIssueSandboxRoute,
 } from "~/server/sandbox/route-helpers";
 import { sandboxProvider } from "~/server/sandbox/provider";
 
@@ -17,34 +17,27 @@ export async function POST(
   request: Request,
   context: IssueSandboxRouteContext,
 ) {
-  const access = await getOwnedIssueProject(request, context);
+  return withOwnedIssueSandboxRoute(request, context, async (access) => {
+    const body = await readJsonObject(request);
+    const sessionId = readStringField(body, "sessionId");
+    const command = readStringField(body, "command");
 
-  if ("response" in access) {
-    return access.response;
-  }
+    if (!command) return sandboxError("missing_command");
 
-  const body = await readJsonObject(request);
-  const sessionId = readStringField(body, "sessionId");
-  const command = readStringField(body, "command");
+    const sessionError = validateIssueSandboxSession(access, sessionId);
 
-  if (!sessionId) return sandboxError("missing_session_id");
-  if (!command) return sandboxError("missing_command");
+    if (sessionError) {
+      return sessionError;
+    }
 
-  if (
-    !verifyIssueSandboxAccess({
-      issueNumber: access.issueNumber,
-      projectId: access.project.id,
-      sessionId,
-      userId: access.userId,
-    })
-  ) {
-    return sandboxError("session_not_found", 404);
-  }
+    if (!sessionId) {
+      return sandboxError("missing_session_id");
+    }
 
-  try {
-    const result = await sandboxProvider.runCommand({ command, sessionId });
-    return sandboxJson({ ok: true as const, ...result });
-  } catch (error) {
-    return sandboxToolError(error, "Unable to run command.");
-  }
+    return respondWithSandboxToolAction(
+      () => sandboxProvider.runCommand({ command, sessionId }),
+      (result) => sandboxJson({ ok: true as const, ...result }),
+      "Unable to run command.",
+    );
+  });
 }

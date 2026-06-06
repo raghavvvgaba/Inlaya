@@ -1,8 +1,8 @@
 import {
-  getOwnedIssueProject,
-  sandboxError,
+  respondWithSandboxAction,
   sandboxJson,
   type IssueSandboxRouteContext,
+  withOwnedIssueSandboxRoute,
 } from "~/server/sandbox/route-helpers";
 import { recordIssueSandboxOwner } from "~/server/sandbox/ownership";
 import { sandboxProvider } from "~/server/sandbox/provider";
@@ -14,27 +14,22 @@ export async function POST(
   request: Request,
   context: IssueSandboxRouteContext,
 ) {
-  const access = await getOwnedIssueProject(request, context);
-
-  if ("response" in access) {
-    return access.response;
-  }
-
-  try {
-    const session = await sandboxProvider.start({
-      repoName: access.project.repoName,
-      repoOwner: access.project.repoOwner,
-    });
-    recordIssueSandboxOwner(session.sessionId, {
-      issueNumber: access.issueNumber,
-      projectId: access.project.id,
-      userId: access.userId,
-    });
-    return sandboxJson({ ok: true as const, session });
-  } catch (error) {
-    return sandboxError(
-      error instanceof Error ? error.message : "Unable to start sandbox.",
-      500,
-    );
-  }
+  return withOwnedIssueSandboxRoute(request, context, async (access) =>
+    respondWithSandboxAction(
+      () =>
+        sandboxProvider.start({
+          repoName: access.project.repoName,
+          repoOwner: access.project.repoOwner,
+        }),
+      (session) => {
+        recordIssueSandboxOwner(session.sessionId, {
+          issueNumber: access.issueNumber,
+          projectId: access.project.id,
+          userId: access.userId,
+        });
+        return sandboxJson({ ok: true as const, session });
+      },
+      "Unable to start sandbox.",
+    ),
+  );
 }

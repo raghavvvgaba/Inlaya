@@ -1,10 +1,11 @@
 import {
-  getOwnedSandboxProject,
+  readQueryStringField,
   sandboxError,
   sandboxJson,
   type ProjectSandboxRouteContext,
+  validateProjectSandboxSession,
+  withOwnedProjectSandboxRoute,
 } from "~/server/sandbox/route-helpers";
-import { canAccessProjectSandbox } from "~/server/sandbox/ownership";
 import { sandboxProvider } from "~/server/sandbox/provider";
 
 export const runtime = "nodejs";
@@ -13,33 +14,24 @@ export async function GET(
   request: Request,
   context: ProjectSandboxRouteContext,
 ) {
-  const access = await getOwnedSandboxProject(request, context);
+  return withOwnedProjectSandboxRoute(request, context, async (access) => {
+    const sessionId = readQueryStringField(request, "sessionId");
+    const sessionError = validateProjectSandboxSession(access, sessionId);
 
-  if ("response" in access) {
-    return access.response;
-  }
+    if (sessionError) {
+      return sessionError;
+    }
 
-  const url = new URL(request.url);
-  const sessionId = url.searchParams.get("sessionId")?.trim();
+    if (!sessionId) {
+      return sandboxError("missing_session_id");
+    }
 
-  if (!sessionId) {
-    return sandboxError("missing_session_id");
-  }
+    const session = sandboxProvider.get(sessionId);
 
-  if (
-    !canAccessProjectSandbox(sessionId, {
-      projectId: access.project.id,
-      userId: access.userId,
-    })
-  ) {
-    return sandboxError("session_not_found", 404);
-  }
+    if (!session) {
+      return sandboxError("session_not_found", 404);
+    }
 
-  const session = sandboxProvider.get(sessionId);
-
-  if (!session) {
-    return sandboxError("session_not_found", 404);
-  }
-
-  return sandboxJson({ ok: true as const, session });
+    return sandboxJson({ ok: true as const, session });
+  });
 }
