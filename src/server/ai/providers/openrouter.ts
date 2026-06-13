@@ -5,6 +5,8 @@ import type {
   AIGenerateTextInput,
   AIGenerateTextResult,
   AIProvider,
+  AIToolCall,
+  AIUsage,
 } from "~/server/ai/types";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
@@ -20,9 +22,26 @@ type OpenRouterResponse = {
   choices?: Array<{
     message?: {
       content?: OpenRouterMessageContent;
+      tool_calls?: Array<{
+        function?: {
+          arguments?: string;
+          name?: string;
+        };
+        id?: string;
+        type?: string;
+      }>;
     };
   }>;
   model?: string;
+  usage?: {
+    completion_tokens?: number;
+    completion_tokens_details?: {
+      reasoning_tokens?: number;
+    };
+    cost?: number;
+    prompt_tokens?: number;
+    total_tokens?: number;
+  };
 };
 
 function getResponseText(response: OpenRouterResponse) {
@@ -38,7 +57,56 @@ function getResponseText(response: OpenRouterResponse) {
       .join("");
   }
 
-  return null;
+  return "";
+}
+
+function getToolCalls(response: OpenRouterResponse): AIToolCall[] {
+  const toolCalls = response.choices?.[0]?.message?.tool_calls;
+
+  if (!Array.isArray(toolCalls)) {
+    return [];
+  }
+
+  return toolCalls.flatMap((toolCall, index) => {
+    if (
+      toolCall?.type !== "function" ||
+      !toolCall.function?.name ||
+      typeof toolCall.function.arguments !== "string"
+    ) {
+      return [];
+    }
+
+    return [
+      {
+        function: {
+          arguments: toolCall.function.arguments,
+          name: toolCall.function.name,
+        },
+        id: toolCall.id ?? `tool_call_${index}`,
+        type: "function",
+      } satisfies AIToolCall,
+    ];
+  });
+}
+
+function getUsage(response: OpenRouterResponse): AIUsage | undefined {
+  const usage = response.usage;
+
+  if (
+    typeof usage?.prompt_tokens !== "number" ||
+    typeof usage.completion_tokens !== "number" ||
+    typeof usage.total_tokens !== "number"
+  ) {
+    return undefined;
+  }
+
+  return {
+    completionTokens: usage.completion_tokens,
+    cost: usage.cost,
+    promptTokens: usage.prompt_tokens,
+    reasoningTokens: usage.completion_tokens_details?.reasoning_tokens,
+    totalTokens: usage.total_tokens,
+  };
 }
 
 function getOpenRouterModel(modelOverride?: string) {
@@ -93,6 +161,8 @@ async function generateText(
               }
             : undefined,
         temperature: input.temperature,
+        tool_choice: input.toolChoice,
+        tools: input.tools,
       }),
       cache: "no-store",
     });
@@ -131,14 +201,18 @@ async function generateText(
   }
 
   const text = getResponseText(data);
+  const toolCalls = getToolCalls(data);
+  const usage = getUsage(data);
 
-  if (!text) {
+  if (!text && toolCalls.length === 0) {
     throw new Error("OpenRouter returned an empty response.");
   }
 
   return {
     model: data.model ?? model,
     text,
+    ...(toolCalls.length > 0 ? { toolCalls } : {}),
+    ...(usage ? { usage } : {}),
   };
 }
 
