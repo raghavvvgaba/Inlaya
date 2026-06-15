@@ -17,7 +17,7 @@ import {
   parseSearchMatches,
   searchSandboxCode,
   SANDBOX_SEARCH_TOTAL_CAP,
-} from "./search-code";
+} from "../search-code";
 
 function createMatchEvent({
   columnStart = 0,

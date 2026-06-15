@@ -4,7 +4,7 @@ import {
   normalizeSandboxRelativePath,
   shouldHideSandboxEntry,
   toSandboxRepoPath,
-} from "./paths";
+} from "../paths";
 
 describe("normalizeSandboxRelativePath", () => {
   it("returns a normalized relative path", () => {

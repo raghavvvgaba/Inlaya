@@ -2,18 +2,23 @@ import "server-only";
 
 /** Implements the app-owned search_code sandbox tool. */
 
+import { z } from "zod";
+
 import { PROJECT_DIR } from "~/server/sandbox/providers/e2b/constants";
 import { sandboxProvider } from "~/server/sandbox/provider";
 import {
   normalizeSandboxRelativePath,
   toSandboxRepoPath,
 } from "~/server/sandbox/tools/paths";
+import type { SandboxAgentToolDefinition } from "~/server/sandbox/tools/types";
 import type {
   SandboxCommandResult,
   SandboxSearchInput,
   SandboxSearchMatch,
   SandboxSearchResult,
 } from "~/server/sandbox/types";
+
+import DESCRIPTION from "./search.txt";
 
 export const SANDBOX_SEARCH_TOTAL_CAP = 10;
 export const SANDBOX_SEARCH_PER_FILE_CAP = 2;
@@ -183,3 +188,44 @@ export async function searchSandboxCode(
 
   return buildSearchResult(result);
 }
+
+const searchArgumentsSchema = z
+  .object({
+    path: z.string().optional(),
+    query: z.string(),
+  })
+  .strict();
+
+type SearchSandboxAgentToolArguments = z.infer<typeof searchArgumentsSchema>;
+
+export const searchSandboxAgentTool = {
+  description: DESCRIPTION,
+  async execute(args, context) {
+    const parsedArguments = searchArgumentsSchema.parse(args);
+
+    return searchSandboxCode({
+      path: parsedArguments.path ?? "",
+      query: parsedArguments.query,
+      sessionId: context.sessionId,
+    });
+  },
+  id: "search_code",
+  parameters: {
+    additionalProperties: false,
+    properties: {
+      path: {
+        description: "Optional repository-relative path to limit the search.",
+        type: "string",
+      },
+      query: {
+        description: "Literal text to search for.",
+        type: "string",
+      },
+    },
+    required: ["query"],
+    type: "object",
+  },
+} satisfies SandboxAgentToolDefinition<
+  SearchSandboxAgentToolArguments,
+  SandboxSearchResult
+>;

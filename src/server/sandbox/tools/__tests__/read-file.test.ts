@@ -15,7 +15,7 @@ vi.mock("~/server/sandbox/provider", () => ({
   },
 }));
 
-import { readSandboxFile, sliceSandboxFileContent } from "./read-file";
+import { readSandboxFile, sliceSandboxFileContent } from "../read-file";
 
 function buildInput(overrides: Partial<Parameters<typeof sliceSandboxFileContent>[1]> = {}) {
   return {

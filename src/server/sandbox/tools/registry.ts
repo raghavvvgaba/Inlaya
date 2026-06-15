@@ -1,10 +1,10 @@
 import "server-only";
 
-import { listSandboxAgentTool } from "./list";
-import { readSandboxAgentTool } from "./read";
-import { searchSandboxAgentTool } from "./search";
 import type { SandboxAgentToolDefinition } from "./types";
-import { writeSandboxAgentTool } from "./write";
+import { listSandboxAgentTool } from "./list-directory";
+import { readSandboxAgentTool } from "./read-file";
+import { searchSandboxAgentTool } from "./search-code";
+import { writeSandboxAgentTool } from "./write-file";
 
 export const sandboxAgentToolRegistry = [
   listSandboxAgentTool,

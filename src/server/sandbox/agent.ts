@@ -10,11 +10,11 @@ import type {
 import { aiProvider } from "~/server/ai/provider";
 import {
   buildSandboxAgentModelTools,
-} from "~/server/sandbox/agent-tools/model-tools";
+} from "~/server/sandbox/tools/model-tools";
 import {
   getSandboxAgentTool,
   type SandboxAgentToolName,
-} from "~/server/sandbox/agent-tools/registry";
+} from "~/server/sandbox/tools/registry";
 import { sandboxProvider } from "~/server/sandbox/provider";
 import { getSandboxDiff } from "~/server/sandbox/tools/diff";
 import type {
