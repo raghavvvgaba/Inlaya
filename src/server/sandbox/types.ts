@@ -125,6 +125,32 @@ export type SandboxCommandResult = {
   stdout: string;
 };
 
+export type SandboxAgentStatus =
+  | "completed"
+  | "blocked"
+  | "failed"
+  | "max_steps_reached";
+
+export type SandboxAgentInput = {
+  issueNumber: number;
+  issueTitle: string;
+  projectId: string;
+  repoName: string;
+  repoOwner: string;
+  sessionId: string;
+  userInstruction: string;
+};
+
+export type SandboxAgentResult = {
+  clarificationQuestion?: string;
+  diff: string;
+  filesTouched: string[];
+  message: string;
+  session?: SandboxSession;
+  status: SandboxAgentStatus;
+  stepsUsed: number;
+};
+
 export type SandboxProvider = {
   get: (sessionId: string) => Promise<SandboxSession | null>;
   heartbeat: (sessionId: string) => Promise<SandboxSession | null>;

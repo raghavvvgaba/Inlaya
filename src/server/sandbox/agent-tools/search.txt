@@ -1,0 +1,7 @@
+Search for literal text in the repository.
+
+Usage:
+- `query` is required.
+- `path` is optional and should be repository-relative when used.
+- Results are capped and hidden files are skipped.
+- If results are truncated, narrow the query or path and search again.

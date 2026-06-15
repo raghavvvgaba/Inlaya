@@ -4,7 +4,13 @@ export type AIMessage =
   | {
       content: string;
       name?: string;
-      role: "assistant" | "system" | "user";
+      role: "system" | "user";
+    }
+  | {
+      content: string;
+      name?: string;
+      role: "assistant";
+      tool_calls?: AIToolCall[];
     }
   | {
       content: string;

@@ -1,0 +1,6 @@
+List files and directories at a repository path.
+
+Usage:
+- Use this when the structure is unclear before reading files.
+- `path` is optional and should be repository-relative.
+- Results reflect the current sandbox filesystem state.

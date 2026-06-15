@@ -10,7 +10,7 @@ import { sandboxProvider } from "~/server/sandbox/provider";
 import type { SandboxFile, SandboxFileInput } from "~/server/sandbox/types";
 
 /** Normalizes line breaks, validates ranges, applies snippet limits, and returns line metadata. */
-function sliceSandboxFileContent(
+export function sliceSandboxFileContent(
   content: string,
   input: SandboxFileInput,
 ): Omit<SandboxFile, "path" | "size"> {

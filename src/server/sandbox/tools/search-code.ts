@@ -9,6 +9,7 @@ import {
   toSandboxRepoPath,
 } from "~/server/sandbox/tools/paths";
 import type {
+  SandboxCommandResult,
   SandboxSearchInput,
   SandboxSearchMatch,
   SandboxSearchResult,
@@ -21,8 +22,8 @@ type RipgrepJsonLine = {
   type?: string;
   data?: {
     line_number?: number;
-    path?: RipgrepTextValue;
     lines?: RipgrepTextValue;
+    path?: RipgrepTextValue;
     submatches?: Array<{
       start?: number;
     }>;
@@ -64,7 +65,19 @@ function toRelativeSandboxPath(path: string) {
     : path;
 }
 
-function buildSearchCommand(input: SandboxSearchInput) {
+export function normalizeSearchQuery(query: string) {
+  const normalizedQuery = query.trim();
+
+  if (!normalizedQuery) {
+    throw new Error("missing_query");
+  }
+
+  return normalizedQuery;
+}
+
+export function buildSearchCommand(
+  input: Pick<SandboxSearchInput, "path" | "query">,
+) {
   const normalizedPath = normalizeSandboxRelativePath(input.path, {
     allowRoot: true,
   });
@@ -89,7 +102,7 @@ function buildSearchCommand(input: SandboxSearchInput) {
   ].join(" ");
 }
 
-function parseSearchMatches(stdout: string) {
+export function parseSearchMatches(stdout: string) {
   const matches: SandboxSearchMatch[] = [];
   const perFileCounts = new Map<string, number>();
 
@@ -134,15 +147,30 @@ function parseSearchMatches(stdout: string) {
   };
 }
 
+export function buildSearchResult(
+  commandResult: Pick<SandboxCommandResult, "exitCode" | "stderr" | "stdout">,
+): SandboxSearchResult {
+  if (commandResult.exitCode && ![0, 1].includes(commandResult.exitCode)) {
+    throw new Error(commandResult.stderr.trim() || "search_failed");
+  }
+
+  const parsed = parseSearchMatches(commandResult.stdout);
+
+  return {
+    caps: {
+      perFile: SANDBOX_SEARCH_PER_FILE_CAP,
+      total: SANDBOX_SEARCH_TOTAL_CAP,
+    },
+    matches: parsed.matches,
+    truncated: commandResult.exitCode === 1 ? false : parsed.truncated,
+  };
+}
+
 /** Runs ripgrep in the sandbox repo and returns capped single-line matches. */
 export async function searchSandboxCode(
   input: SandboxSearchInput,
 ): Promise<SandboxSearchResult> {
-  const query = input.query.trim();
-
-  if (!query) {
-    throw new Error("missing_query");
-  }
+  const query = normalizeSearchQuery(input.query);
 
   const result = await sandboxProvider.runRawCommand({
     command: buildSearchCommand({
@@ -153,18 +181,5 @@ export async function searchSandboxCode(
     sessionId: input.sessionId,
   });
 
-  if (result.exitCode && ![0, 1].includes(result.exitCode)) {
-    throw new Error(result.stderr.trim() || "search_failed");
-  }
-
-  const parsed = parseSearchMatches(result.stdout);
-
-  return {
-    caps: {
-      perFile: SANDBOX_SEARCH_PER_FILE_CAP,
-      total: SANDBOX_SEARCH_TOTAL_CAP,
-    },
-    matches: parsed.matches,
-    truncated: result.exitCode === 1 ? false : parsed.truncated,
-  };
+  return buildSearchResult(result);
 }

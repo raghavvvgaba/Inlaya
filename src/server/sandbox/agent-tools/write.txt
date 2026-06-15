@@ -1,0 +1,6 @@
+Overwrite a file with complete final contents.
+
+Usage:
+- `path` should be a repository-relative file path.
+- `content` must contain the full final file contents.
+- Only write files you have already inspected.

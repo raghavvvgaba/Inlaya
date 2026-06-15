@@ -11,6 +11,14 @@ const currentDir = path.dirname(fileURLToPath(import.meta.url));
 /** @type {import("next").NextConfig} */
 const config = {
   outputFileTracingRoot: currentDir,
+  webpack(webpackConfig) {
+    webpackConfig.module.rules.push({
+      test: /\.txt$/i,
+      type: "asset/source",
+    });
+
+    return webpackConfig;
+  },
 };
 
 export default config;

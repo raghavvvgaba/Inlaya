@@ -1,0 +1,7 @@
+Read file contents from the repository.
+
+Usage:
+- `path` should be a repository-relative file path.
+- Prefer bounded reads first.
+- Use `startLine` and `endLine` when you only need a portion of the file.
+- Request a full-file read only immediately before writing that file.
