@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 
 import type {
+  AIUsage,
   AIMessage,
   AIToolCall,
   AIGenerateTextResult,
@@ -64,6 +65,7 @@ type AgentRunState = {
   recoverableToolErrorCount: number;
   stepsUsed: number;
   transcript: AIMessage[];
+  usage?: AIUsage;
 };
 
 type AgentToolSuccess = {
@@ -92,6 +94,16 @@ type AgentToolExecutionResult =
   | ({ status: "ok" } & AgentToolSuccess)
   | AgentToolRecoverableFailure
   | AgentToolHardFailure;
+
+function previewText(value: string, maxLength = 220) {
+  const normalized = value.trim().replace(/\s+/g, " ");
+
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, maxLength)}...`;
+}
 
 function pushRecentEvent(state: AgentRunState, event: string) {
   state.recentEvents.push(event);
@@ -256,6 +268,52 @@ function formatToolFeedback(tool: SandboxAgentToolName, message: string) {
   ].join("\n");
 }
 
+function logAgentModelResponse(
+  input: SandboxAgentInput,
+  step: number,
+  response: AIGenerateTextResult,
+) {
+  console.log("Sandbox agent model response:", {
+    hasText: Boolean(response.text.trim()),
+    issueNumber: input.issueNumber,
+    projectId: input.projectId,
+    step,
+    textPreview: response.text.trim() ? previewText(response.text) : null,
+    toolCalls:
+      response.toolCalls?.map((toolCall) => ({
+        argumentsPreview: previewText(toolCall.function.arguments, 160),
+        id: toolCall.id,
+        name: toolCall.function.name,
+      })) ?? [],
+    usage: response.usage,
+  });
+}
+
+function logAgentToolResult(
+  input: SandboxAgentInput,
+  step: number,
+  toolCall: AIToolCall,
+  result: AgentToolExecutionResult,
+) {
+  console.log("Sandbox agent tool result:", {
+    issueNumber: input.issueNumber,
+    latestObservationPreview:
+      "latestObservation" in result
+        ? previewText(result.latestObservation)
+        : null,
+    projectId: input.projectId,
+    recentEvent: result.recentEvent,
+    status: result.status,
+    step,
+    tool: toolCall.function.name,
+    toolArgumentsPreview: previewText(toolCall.function.arguments, 160),
+    toolMessagePreview:
+      "toolMessageContent" in result
+        ? previewText(result.toolMessageContent, 220)
+        : null,
+  });
+}
+
 function buildFinishResponseSchema() {
   return {
     additionalProperties: false,
@@ -281,6 +339,26 @@ function buildFinishResponseSchema() {
 
 function parseFinishResponse(text: string) {
   return finishSchema.parse(JSON.parse(text));
+}
+
+function mergeUsage(previous: AIUsage | undefined, next: AIUsage | undefined) {
+  if (!next) {
+    return previous;
+  }
+
+  return {
+    completionTokens: (previous?.completionTokens ?? 0) + next.completionTokens,
+    cost:
+      previous?.cost === undefined && next.cost === undefined
+        ? undefined
+        : (previous?.cost ?? 0) + (next.cost ?? 0),
+    promptTokens: (previous?.promptTokens ?? 0) + next.promptTokens,
+    reasoningTokens:
+      previous?.reasoningTokens === undefined && next.reasoningTokens === undefined
+        ? undefined
+        : (previous?.reasoningTokens ?? 0) + (next.reasoningTokens ?? 0),
+    totalTokens: (previous?.totalTokens ?? 0) + next.totalTokens,
+  };
 }
 
 async function callAgentModel(
@@ -461,6 +539,7 @@ async function buildAgentResult(
     filesTouched: Array.from(state.filesTouched).sort(),
     session: await resolveFinalSession(state, input.sessionId),
     stepsUsed: state.stepsUsed,
+    ...(state.usage ? { usage: state.usage } : {}),
   };
 }
 
@@ -478,12 +557,22 @@ async function buildFailedResult(
     session: await resolveFinalSession(state, input.sessionId),
     status: "failed",
     stepsUsed: state.stepsUsed,
+    ...(state.usage ? { usage: state.usage } : {}),
   };
 }
 
 export async function runSandboxAgent(
   input: SandboxAgentInput,
 ): Promise<SandboxAgentInternalResult> {
+  console.log("Sandbox agent started:", {
+    instructionPreview: previewText(input.userInstruction, 240),
+    issueNumber: input.issueNumber,
+    projectId: input.projectId,
+    repoName: input.repoName,
+    repoOwner: input.repoOwner,
+    sessionId: input.sessionId,
+  });
+
   const state: AgentRunState = {
     filesTouched: new Set<string>(),
     latestObservation: "No tool has been called yet.",
@@ -500,6 +589,7 @@ export async function runSandboxAgent(
         role: "user",
       },
     ],
+    usage: undefined,
   };
 
   for (let step = 0; step < MAX_AGENT_STEPS; step += 1) {
@@ -515,6 +605,8 @@ export async function runSandboxAgent(
     }
 
     state.stepsUsed += 1;
+    state.usage = mergeUsage(state.usage, modelResponse.usage);
+    logAgentModelResponse(input, state.stepsUsed, modelResponse);
 
     const toolCall = modelResponse.toolCalls?.[0];
 
@@ -541,6 +633,7 @@ export async function runSandboxAgent(
     }
 
     const toolResult = await executeToolCall(toolCall, input.sessionId);
+    logAgentToolResult(input, state.stepsUsed, toolCall, toolResult);
 
     pushRecentEvent(state, toolResult.recentEvent);
 

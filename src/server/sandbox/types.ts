@@ -1,3 +1,5 @@
+import type { AIUsage } from "~/server/ai/types";
+
 export type SandboxStatus = "starting" | "installing" | "running" | "stopped" | "error";
 export type PreviewState = "ready" | "recovering" | "stale" | "offline";
 export type StartupStage = "creating" | "scaffolding" | "installing" | "seeding" | "starting-preview" | "ready" | "error";
@@ -149,6 +151,7 @@ export type SandboxAgentResult = {
   session?: SandboxSession;
   status: SandboxAgentStatus;
   stepsUsed: number;
+  usage?: AIUsage;
 };
 
 export type SandboxProvider = {

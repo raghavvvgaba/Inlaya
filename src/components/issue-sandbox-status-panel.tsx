@@ -93,6 +93,10 @@ function getErrorMessage(error: unknown) {
   return "Sandbox request failed.";
 }
 
+function isSessionNotFoundError(error: unknown) {
+  return error instanceof Error && error.message === "session_not_found";
+}
+
 async function readSandboxResponse(response: Response) {
   const bodyText = await response.text();
   let result: SandboxResponse | null = null;
@@ -190,24 +194,76 @@ export function IssueSandboxStatusPanel({
     [saveSession, sessionAction],
   );
 
-  useEffect(() => {
-    const savedValue = window.localStorage.getItem(storageKey);
-    if (!savedValue) return;
+  const loadCurrentProjectSession = useCallback(async () => {
+    const response = await fetch(sessionAction, {
+      headers: {
+        Accept: "application/json",
+      },
+    });
+    const nextSession = await readSandboxResponse(response);
+    saveSession(nextSession);
+    return nextSession;
+  }, [saveSession, sessionAction]);
 
-    try {
-      const saved = JSON.parse(savedValue) as Partial<SavedSandboxSession>;
-      if (!saved.sessionId) {
-        clearSavedSession();
-        return;
+  useEffect(() => {
+    let cancelled = false;
+
+    async function bootstrapSession() {
+      const savedValue = window.localStorage.getItem(storageKey);
+
+      if (savedValue) {
+        try {
+          const saved = JSON.parse(savedValue) as Partial<SavedSandboxSession>;
+
+          if (saved.sessionId) {
+            try {
+              await refreshSession(saved.sessionId);
+              setError(null);
+              return;
+            } catch (refreshError) {
+              if (!isSessionNotFoundError(refreshError)) {
+                setError(getErrorMessage(refreshError));
+              }
+            }
+          } else {
+            clearSavedSession();
+          }
+        } catch {
+          clearSavedSession();
+        }
       }
 
-      void refreshSession(saved.sessionId).catch(() => {
+      try {
+        await loadCurrentProjectSession();
+        setError(null);
+      } catch (loadError) {
+        if (cancelled) {
+          return;
+        }
+
+        if (isSessionNotFoundError(loadError)) {
+          setSession(null);
+          setError(null);
+          clearSavedSession();
+          return;
+        }
+
         clearSavedSession();
-      });
-    } catch {
-      clearSavedSession();
+        setError(getErrorMessage(loadError));
+      }
     }
-  }, [clearSavedSession, refreshSession, storageKey]);
+
+    void bootstrapSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    clearSavedSession,
+    loadCurrentProjectSession,
+    refreshSession,
+    storageKey,
+  ]);
 
   useEffect(() => {
     if (!session || session.status === "running" || session.status === "stopped" || session.status === "error") {

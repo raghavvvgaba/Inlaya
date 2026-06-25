@@ -34,7 +34,7 @@ const toneIcons: Record<NonNullable<AIChatMessage["tone"]>, React.ReactNode> = {
 
 function getMessageLabel(message: AIChatMessage) {
   if (message.isThinking) {
-    return "Preparing edit";
+    return "Devin";
   }
 
   if (message.role === "user") {

@@ -1,4 +1,7 @@
 import {
+  getActiveProjectSandboxSession,
+} from "~/server/sandbox/ownership";
+import {
   readQueryStringField,
   sandboxError,
   sandboxJson,
@@ -16,17 +19,33 @@ export async function GET(
 ) {
   return withOwnedProjectSandboxRoute(request, context, async (access) => {
     const sessionId = readQueryStringField(request, "sessionId");
-    const sessionError = await validateProjectSandboxSession(access, sessionId);
 
-    if (sessionError) {
-      return sessionError;
+    if (sessionId) {
+      const sessionError = await validateProjectSandboxSession(access, sessionId);
+
+      if (sessionError) {
+        return sessionError;
+      }
+
+      const session = await sandboxProvider.get(sessionId);
+
+      if (!session) {
+        return sandboxError("session_not_found", 404);
+      }
+
+      return sandboxJson({ ok: true as const, session });
     }
 
-    if (!sessionId) {
-      return sandboxError("missing_session_id");
+    const persistedSession = await getActiveProjectSandboxSession({
+      projectId: access.project.id,
+      userId: access.userId,
+    });
+
+    if (!persistedSession) {
+      return sandboxError("session_not_found", 404);
     }
 
-    const session = await sandboxProvider.get(sessionId);
+    const session = await sandboxProvider.get(persistedSession.sessionId);
 
     if (!session) {
       return sandboxError("session_not_found", 404);

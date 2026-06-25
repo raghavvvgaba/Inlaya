@@ -156,6 +156,15 @@ export async function POST(
     userInstruction: instruction,
   });
 
+  if (result.usage) {
+    console.log("Sandbox agent usage:", {
+      issueNumber: access.issueNumber,
+      projectId: access.project.id,
+      status: result.status,
+      usage: result.usage,
+    });
+  }
+
   let chatMessages: Awaited<ReturnType<typeof appendIssueChatMessages>> | undefined;
 
   try {

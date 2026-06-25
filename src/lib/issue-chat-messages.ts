@@ -10,6 +10,7 @@ type IssueChatMessageEntry = {
 type IssueChatSuccessCode = "edit_prepared";
 
 type IssueChatErrorCode =
+  | "agent_run_failed"
   | "chat_persist_failed"
   | "edit_access_missing"
   | "edit_ai_unavailable"
@@ -38,6 +39,10 @@ const issueChatSuccessMessages: Record<IssueChatSuccessCode, IssueChatMessageEnt
   };
 
 const issueChatErrorMessages: Record<IssueChatErrorCode, IssueChatMessageEntry> = {
+  agent_run_failed: {
+    body: "The sandbox agent could not finish this request. The workspace is still intact, and you can retry with a narrower instruction.",
+    tone: "error",
+  },
   chat_persist_failed: {
     body: "The edit was prepared, but the chat could not be saved. Retry once so the conversation history stays durable.",
     tone: "error",

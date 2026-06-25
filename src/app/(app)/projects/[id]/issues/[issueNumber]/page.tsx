@@ -42,7 +42,7 @@ export default async function ProjectIssuePage({
     project,
   } = issueWorkspaceData;
   const sandboxBaseAction = `/api/projects/${project.id}/issues/${issueNumber}/sandbox`;
-  const editAction = `${sandboxBaseAction}/edit`;
+  const agentAction = `${sandboxBaseAction}/agent`;
 
   return (
     <AppShell compactHeader contentWidth="full" description="" title="Issue">
@@ -102,8 +102,7 @@ export default async function ProjectIssuePage({
 
       <IssueChatWorkspace
         accessBlocked={accessBlocked}
-        editAction={editAction}
-        initialFilePath=""
+        agentAction={agentAction}
         initialInstruction=""
         initialMessages={messages}
         issueNumber={issueNumber}

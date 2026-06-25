@@ -1,27 +1,22 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { ArrowUp, FileCode2, LoaderCircle } from "lucide-react";
+import { ArrowUp, LoaderCircle, Sparkles } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
 
 type ChatInputBoxProps = {
   accessBlocked?: boolean;
-  filePath: string;
   instruction: string;
   isPreparing?: boolean;
-  onFilePathChange: (value: string) => void;
   onInstructionChange: (value: string) => void;
   onPrepareEdit: () => void;
 };
 
 export function ChatInputBox({
   accessBlocked = false,
-  filePath,
   instruction,
   isPreparing = false,
-  onFilePathChange,
   onInstructionChange,
   onPrepareEdit,
 }: ChatInputBoxProps) {
@@ -43,28 +38,11 @@ export function ChatInputBox({
       <div
         className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-2 shadow-[0_8px_30px_rgba(0,0,0,0.28)]"
       >
-        <div className="mb-2 flex items-center gap-3 rounded-[1.15rem] border border-white/10 bg-black/30 px-3 py-1.5">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-2xl bg-white/[0.06] text-white/70">
-            <FileCode2 className="h-3.5 w-3.5" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-white/45">
-              File Section
-            </p>
-            <Input
-              className="h-auto border-0 bg-transparent px-0 py-0 font-mono text-xs text-white shadow-none focus-visible:ring-0"
-              disabled={accessBlocked || isPreparing}
-              onChange={(event) => {
-                onFilePathChange(event.target.value);
-              }}
-              placeholder="README.md"
-              value={filePath}
-              required
-            />
-          </div>
-        </div>
-
         <div className="rounded-[1.35rem] border border-white/10 bg-black/30 px-3 py-2">
+          <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45">
+            <Sparkles className="h-3.5 w-3.5" />
+            Agent Instruction
+          </div>
           <textarea
             ref={textareaRef}
             className="min-h-[48px] w-full resize-none bg-transparent text-sm leading-6 text-white outline-none placeholder:text-white/35"
@@ -83,7 +61,7 @@ export function ChatInputBox({
                 onPrepareEdit();
               }
             }}
-            placeholder="Describe the change you want me to prepare for this issue."
+            placeholder="Describe what you want Devin to change in the sandbox."
             value={instruction}
             required
           />
@@ -100,7 +78,7 @@ export function ChatInputBox({
               ) : (
                 <ArrowUp className="h-4 w-4" />
               )}
-              {isPreparing ? "Preparing" : "Prepare Edit"}
+              {isPreparing ? "Working" : "Run Agent"}
             </Button>
           </div>
         </div>

@@ -9,29 +9,28 @@ import { buildIssueChatRuntimeMessage } from "~/lib/issue-chat-messages";
 
 type IssueChatWorkspaceProps = {
   accessBlocked: boolean;
-  editAction: string;
-  initialFilePath: string;
+  agentAction: string;
   initialInstruction: string;
   initialMessages: AIChatMessage[];
   issueNumber: number;
   projectId: string;
 };
 
-type EditResponse =
+type AgentResponse =
   | {
-      filePath: string;
-      messages: AIChatMessage[];
-      status: "ok";
+      clarificationQuestion?: string;
+      message: string;
+      messages?: AIChatMessage[];
+      status: "blocked" | "completed" | "max_steps_reached";
     }
   | {
-      code: string;
-      status: "error";
+      message?: string;
+      status: "failed";
     };
 
 export function IssueChatWorkspace({
   accessBlocked,
-  editAction,
-  initialFilePath,
+  agentAction,
   initialInstruction,
   initialMessages,
   issueNumber,
@@ -39,9 +38,8 @@ export function IssueChatWorkspace({
 }: IssueChatWorkspaceProps) {
   const router = useRouter();
   const [messages, setMessages] = useState(initialMessages);
-  const [filePath, setFilePath] = useState(initialFilePath);
   const [instruction, setInstruction] = useState(initialInstruction);
-  const [isPreparing, setIsPreparing] = useState(false);
+  const [isRunning, setIsRunning] = useState(false);
 
   const thinkingMessage = useMemo<AIChatMessage>(
     () => ({
@@ -76,12 +74,25 @@ export function IssueChatWorkspace({
     }
   }
 
-  async function handlePrepareEdit() {
-    const trimmedFilePath = filePath.trim();
+  function buildFallbackAgentMessage(result: Extract<AgentResponse, { status: "blocked" | "completed" | "max_steps_reached" }>): AIChatMessage {
+    return {
+      body: result.clarificationQuestion
+        ? `${result.message}\n\nClarification needed: ${result.clarificationQuestion}`
+        : result.message,
+      id: `agent-message-${Date.now()}`,
+      role: "assistant",
+      tone:
+        result.status === "completed"
+          ? "success"
+          : "warning",
+    };
+  }
+
+  async function handleRunAgent() {
     const trimmedInstruction = instruction.trim();
     const sessionId = getSandboxSessionId();
 
-    if (!trimmedFilePath || !trimmedInstruction || accessBlocked || isPreparing) {
+    if (!trimmedInstruction || accessBlocked || isRunning) {
       return;
     }
 
@@ -94,18 +105,17 @@ export function IssueChatWorkspace({
     }
 
     const userMessage: AIChatMessage = {
-      body: `${trimmedInstruction}\n\nIssue #${issueNumber} · ${trimmedFilePath}`,
+      body: `${trimmedInstruction}\n\nIssue #${issueNumber}`,
       id: `user-message-${Date.now()}`,
       role: "user",
     };
 
-    setIsPreparing(true);
+    setIsRunning(true);
     setMessages((current) => [...current, userMessage, thinkingMessage]);
 
     try {
-      const response = await fetch(editAction, {
+      const response = await fetch(agentAction, {
         body: JSON.stringify({
-          filePath: trimmedFilePath,
           instruction: trimmedInstruction,
           sessionId,
         }),
@@ -116,35 +126,40 @@ export function IssueChatWorkspace({
         method: "POST",
       });
 
-      const result = (await response.json()) as EditResponse;
+      const result = (await response.json()) as AgentResponse;
 
-      if (!response.ok || result.status !== "ok") {
+      if (!response.ok || result.status === "failed") {
         setMessages((current) => [
           ...current.filter((message) => message.id !== thinkingMessage.id),
-          buildIssueChatRuntimeMessage(
-            result.status === "error" ? result.code : "edit_prepare_failed",
-          ),
+          buildIssueChatRuntimeMessage("agent_run_failed", {
+            fallbackBody:
+              result.message ?? "The sandbox agent could not finish this request.",
+          }),
         ]);
         return;
       }
 
-      setFilePath(result.filePath);
-      setInstruction(trimmedInstruction);
+      setInstruction("");
+      const nextMessages =
+        result.messages && result.messages.length > 0
+          ? result.messages
+          : [userMessage, buildFallbackAgentMessage(result)];
+
       setMessages((current) => [
         ...current.filter(
           (message) =>
             message.id !== thinkingMessage.id && message.id !== userMessage.id,
         ),
-        ...result.messages,
+        ...nextMessages,
       ]);
       router.refresh();
     } catch {
       setMessages((current) => [
         ...current.filter((message) => message.id !== thinkingMessage.id),
-        buildIssueChatRuntimeMessage("edit_prepare_failed"),
+        buildIssueChatRuntimeMessage("agent_run_failed"),
       ]);
     } finally {
-      setIsPreparing(false);
+      setIsRunning(false);
     }
   }
 
@@ -156,12 +171,10 @@ export function IssueChatWorkspace({
     >
       <ChatInputBox
         accessBlocked={accessBlocked}
-        filePath={filePath}
         instruction={instruction}
-        isPreparing={isPreparing}
-        onFilePathChange={setFilePath}
+        isPreparing={isRunning}
         onInstructionChange={setInstruction}
-        onPrepareEdit={handlePrepareEdit}
+        onPrepareEdit={handleRunAgent}
       />
     </AIChat>
   );

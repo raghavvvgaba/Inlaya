@@ -4,6 +4,7 @@ import "server-only";
 
 import {
   canAccessProjectSandboxSession,
+  getReusableProjectSandboxSession,
   getSandboxSessionRecordByProjectId,
   markSandboxSessionStopped,
 } from "~/server/sandbox/session-registry";
@@ -31,4 +32,12 @@ export async function canAccessProjectSandbox(
 /** Looks up the stored sandbox session record for a project. */
 export async function getProjectSandboxSession(projectId: string) {
   return getSandboxSessionRecordByProjectId(projectId);
+}
+
+/** Returns the active reusable sandbox session record for a project owner. */
+export async function getActiveProjectSandboxSession(input: {
+  projectId: string;
+  userId: string;
+}) {
+  return getReusableProjectSandboxSession(input);
 }
