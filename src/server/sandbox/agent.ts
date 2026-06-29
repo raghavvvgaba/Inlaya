@@ -95,6 +95,8 @@ type AgentToolExecutionResult =
   | AgentToolRecoverableFailure
   | AgentToolHardFailure;
 
+type AgentModelPhase = "tool" | "finish";
+
 function previewText(value: string, maxLength = 220) {
   const normalized = value.trim().replace(/\s+/g, " ");
 
@@ -116,7 +118,7 @@ function pushRecentEvent(state: AgentRunState, event: string) {
 function buildAgentSystemPrompt() {
   return [
     "You are Devin's bounded coding agent for one sandbox repository.",
-    `You have at most ${MAX_AGENT_STEPS} turns to finish.`,
+    `You have at most ${MAX_AGENT_STEPS} tool-use turns before the final answer.`,
     "Respond in English.",
     "Use at most one tool call per turn.",
     "Search or inspect before editing when the target is unclear.",
@@ -125,6 +127,15 @@ function buildAgentSystemPrompt() {
     "Only write files you have already inspected.",
     "If the request is unclear or unsupported, answer with JSON containing status, message, and an optional clarificationQuestion.",
     "Do not invent tools, files, commands, or multi-action turns.",
+  ].join("\n");
+}
+
+function buildAgentFinishPrompt() {
+  return [
+    "Do not call any tools.",
+    "Return the final result as JSON only.",
+    'Use this shape: {"status":"completed"|"blocked","message":"...","clarificationQuestion":"optional"}',
+    "Do not include markdown fences or any extra prose.",
   ].join("\n");
 }
 
@@ -270,12 +281,14 @@ function formatToolFeedback(tool: SandboxAgentToolName, message: string) {
 
 function logAgentModelResponse(
   input: SandboxAgentInput,
+  phase: AgentModelPhase,
   step: number,
   response: AIGenerateTextResult,
 ) {
   console.log("Sandbox agent model response:", {
     hasText: Boolean(response.text.trim()),
     issueNumber: input.issueNumber,
+    phase,
     projectId: input.projectId,
     step,
     textPreview: response.text.trim() ? previewText(response.text) : null,
@@ -361,12 +374,30 @@ function mergeUsage(previous: AIUsage | undefined, next: AIUsage | undefined) {
   };
 }
 
-async function callAgentModel(
+async function callAgentToolTurn(
   state: AgentRunState,
 ): Promise<AIGenerateTextResult> {
   return aiProvider.generateText({
     maxTokens: 1_500,
     messages: state.transcript,
+    temperature: 0.1,
+    toolChoice: "auto",
+    tools: sandboxAgentModelTools,
+  });
+}
+
+async function callAgentFinishTurn(
+  state: AgentRunState,
+): Promise<AIGenerateTextResult> {
+  return aiProvider.generateText({
+    maxTokens: 1_500,
+    messages: [
+      ...state.transcript,
+      {
+        content: buildAgentFinishPrompt(),
+        role: "user",
+      },
+    ],
     responseFormat: {
       type: "json_schema",
       jsonSchema: {
@@ -376,8 +407,7 @@ async function callAgentModel(
       },
     },
     temperature: 0.1,
-    toolChoice: "auto",
-    tools: sandboxAgentModelTools,
+    toolChoice: "none",
   });
 }
 
@@ -528,6 +558,17 @@ function appendToolMessages(
   });
 }
 
+function appendAssistantMessage(state: AgentRunState, content: string) {
+  if (!content.trim()) {
+    return;
+  }
+
+  state.transcript.push({
+    content,
+    role: "assistant",
+  });
+}
+
 async function buildAgentResult(
   input: SandboxAgentInput,
   state: AgentRunState,
@@ -596,9 +637,9 @@ export async function runSandboxAgent(
     let modelResponse: AIGenerateTextResult;
 
     try {
-      modelResponse = await callAgentModel(state);
+      modelResponse = await callAgentToolTurn(state);
     } catch (error) {
-      console.error("Sandbox agent model turn failed:", error);
+      console.error("Sandbox agent tool turn failed:", error);
       const mappedError = mapModelError(error);
 
       return buildFailedResult(input, state, mappedError.code, mappedError.message);
@@ -606,15 +647,32 @@ export async function runSandboxAgent(
 
     state.stepsUsed += 1;
     state.usage = mergeUsage(state.usage, modelResponse.usage);
-    logAgentModelResponse(input, state.stepsUsed, modelResponse);
+    logAgentModelResponse(input, "tool", state.stepsUsed, modelResponse);
 
     const toolCall = modelResponse.toolCalls?.[0];
 
     if (!toolCall) {
+      appendAssistantMessage(state, modelResponse.text);
+
+      let finishTurnResponse: AIGenerateTextResult;
+
+      try {
+        finishTurnResponse = await callAgentFinishTurn(state);
+      } catch (error) {
+        console.error("Sandbox agent finish turn failed:", error);
+        const mappedError = mapModelError(error);
+
+        return buildFailedResult(input, state, mappedError.code, mappedError.message);
+      }
+
+      state.stepsUsed += 1;
+      state.usage = mergeUsage(state.usage, finishTurnResponse.usage);
+      logAgentModelResponse(input, "finish", state.stepsUsed, finishTurnResponse);
+
       let finishResponse: z.infer<typeof finishSchema>;
 
       try {
-        finishResponse = parseFinishResponse(modelResponse.text);
+        finishResponse = parseFinishResponse(finishTurnResponse.text);
       } catch (error) {
         console.error("Sandbox agent finish response was invalid:", error);
         return buildFailedResult(
