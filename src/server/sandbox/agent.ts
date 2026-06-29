@@ -30,11 +30,17 @@ import type {
 const MAX_AGENT_STEPS = 8;
 const MAX_RECENT_EVENTS = 5;
 const MAX_LIST_DIRECTORY_ENTRIES = 40;
+const MAX_READ_ONLY_TOOL_CALLS = 5;
 
 const sandboxAgentModelTools = buildSandboxAgentModelTools();
 const sandboxAgentToolIds = sandboxAgentModelTools.map(
   (tool) => tool.function.name,
 ) as SandboxAgentToolName[];
+const READ_ONLY_TOOL_NAMES = new Set<SandboxAgentToolName>([
+  "list_directory",
+  "read_file",
+  "search_code",
+]);
 
 const finishSchema = z.object({
   clarificationQuestion: z.string().trim().min(1).max(240).optional(),
@@ -97,6 +103,56 @@ type AgentToolExecutionResult =
 
 type AgentModelPhase = "tool" | "finish";
 
+type ToolTurnClassification =
+  | {
+      status: "finish";
+    }
+  | {
+      status: "single";
+      toolCalls: [AIToolCall];
+    }
+  | {
+      status: "read_only_batch";
+      toolCalls: AIToolCall[];
+    }
+  | {
+      reason: string;
+      status: "invalid_batch";
+      toolCalls: AIToolCall[];
+    };
+
+type ExecutedAgentTool = {
+  result: AgentToolExecutionResult;
+  toolCall: AIToolCall;
+};
+
+type AgentToolBatchResult =
+  | {
+      executed: ExecutedAgentTool[];
+      latestObservation: string;
+      latestSession?: SandboxSession;
+      status: "ok" | "recoverable_failure";
+      touchedPaths: string[];
+    }
+  | {
+      code: AgentFailureCode;
+      executed: ExecutedAgentTool[];
+      latestObservation: string;
+      latestSession?: SandboxSession;
+      message: string;
+      status: "hard_failure";
+      touchedPaths: string[];
+    };
+
+function hasToolMessageContent(
+  result: AgentToolExecutionResult,
+): result is Extract<
+  AgentToolExecutionResult,
+  { status: "ok" | "recoverable_failure" }
+> {
+  return "toolMessageContent" in result;
+}
+
 function previewText(value: string, maxLength = 220) {
   const normalized = value.trim().replace(/\s+/g, " ");
 
@@ -120,7 +176,8 @@ function buildAgentSystemPrompt() {
     "You are Devin's bounded coding agent for one sandbox repository.",
     `You have at most ${MAX_AGENT_STEPS} tool-use turns before the final answer.`,
     "Respond in English.",
-    "Use at most one tool call per turn.",
+    `You may return up to ${MAX_READ_ONLY_TOOL_CALLS} tool calls in one turn only when every call is read-only: list_directory, read_file, or search_code.`,
+    "write_file must be used alone.",
     "Search or inspect before editing when the target is unclear.",
     "Prefer bounded reads first.",
     "Request a full-file read only immediately before writing that file.",
@@ -136,6 +193,14 @@ function buildAgentFinishPrompt() {
     "Return the final result as JSON only.",
     'Use this shape: {"status":"completed"|"blocked","message":"...","clarificationQuestion":"optional"}',
     "Do not include markdown fences or any extra prose.",
+  ].join("\n");
+}
+
+function buildMultiToolRetryPrompt() {
+  return [
+    "Your previous response returned an invalid tool batch.",
+    `Return either exactly one write_file call, or up to ${MAX_READ_ONLY_TOOL_CALLS} read-only tool calls using only list_directory, read_file, and search_code.`,
+    "Do not mix write_file with any other tool.",
   ].join("\n");
 }
 
@@ -354,6 +419,42 @@ function parseFinishResponse(text: string) {
   return finishSchema.parse(JSON.parse(text));
 }
 
+function classifyToolTurn(response: AIGenerateTextResult): ToolTurnClassification {
+  const toolCalls = response.toolCalls ?? [];
+
+  if (toolCalls.length === 0) {
+    return {
+      status: "finish",
+    };
+  }
+
+  if (toolCalls.length === 1) {
+    return {
+      status: "single",
+      toolCalls: [toolCalls[0]!],
+    };
+  }
+
+  const allReadOnly = toolCalls.every((toolCall) =>
+    READ_ONLY_TOOL_NAMES.has(toolCall.function.name as SandboxAgentToolName),
+  );
+
+  if (allReadOnly && toolCalls.length <= MAX_READ_ONLY_TOOL_CALLS) {
+    return {
+      status: "read_only_batch",
+      toolCalls,
+    };
+  }
+
+  return {
+    reason: allReadOnly
+      ? `Too many read-only tool calls were returned (${toolCalls.length}).`
+      : "write_file was mixed with other tools or an unsupported multi-tool combination was returned.",
+    status: "invalid_batch",
+    toolCalls,
+  };
+}
+
 function mergeUsage(previous: AIUsage | undefined, next: AIUsage | undefined) {
   if (!next) {
     return previous;
@@ -542,20 +643,25 @@ async function resolveFinalDiff(sessionId: string) {
 
 function appendToolMessages(
   state: AgentRunState,
-  toolCall: AIToolCall,
-  toolMessageContent: string,
+  toolCalls: AIToolCall[],
+  toolMessages: Array<{
+    toolCallId: string;
+    toolMessageContent: string;
+  }>,
   assistantContent: string,
 ) {
   state.transcript.push({
     content: assistantContent,
     role: "assistant",
-    tool_calls: [toolCall],
+    tool_calls: toolCalls,
   });
-  state.transcript.push({
-    content: toolMessageContent,
-    role: "tool",
-    tool_call_id: toolCall.id,
-  });
+  for (const toolMessage of toolMessages) {
+    state.transcript.push({
+      content: toolMessage.toolMessageContent,
+      role: "tool",
+      tool_call_id: toolMessage.toolCallId,
+    });
+  }
 }
 
 function appendAssistantMessage(state: AgentRunState, content: string) {
@@ -567,6 +673,72 @@ function appendAssistantMessage(state: AgentRunState, content: string) {
     content,
     role: "assistant",
   });
+}
+
+function appendUserMessage(state: AgentRunState, content: string) {
+  state.transcript.push({
+    content,
+    role: "user",
+  });
+}
+
+function buildBatchObservation(executed: ExecutedAgentTool[]) {
+  const observationParts = executed.flatMap((item) =>
+    "latestObservation" in item.result ? [item.result.latestObservation] : [],
+  );
+
+  return observationParts.join("\n\n");
+}
+
+async function executeReadOnlyBatch(
+  toolCalls: AIToolCall[],
+  sessionId: string,
+): Promise<AgentToolBatchResult> {
+  const executed: ExecutedAgentTool[] = [];
+  const touchedPaths: string[] = [];
+  let latestSession: SandboxSession | undefined;
+  let hadRecoverableFailure = false;
+
+  for (const toolCall of toolCalls) {
+    const result = await executeToolCall(toolCall, sessionId);
+    executed.push({
+      result,
+      toolCall,
+    });
+
+    if ("touchedPath" in result && result.touchedPath) {
+      touchedPaths.push(result.touchedPath);
+    }
+
+    if ("session" in result && result.session) {
+      latestSession = result.session;
+    }
+
+    if (result.status === "recoverable_failure") {
+      hadRecoverableFailure = true;
+      continue;
+    }
+
+    if (result.status === "hard_failure") {
+      return {
+        code: result.code,
+        executed,
+        latestObservation: buildBatchObservation(executed),
+        latestSession,
+        message: result.message,
+        status: "hard_failure",
+        touchedPaths,
+      };
+    }
+  }
+
+  return {
+    executed,
+    latestObservation: buildBatchObservation(executed),
+    latestSession,
+    status: hadRecoverableFailure ? "recoverable_failure" : "ok",
+    touchedPaths,
+  };
 }
 
 async function buildAgentResult(
@@ -632,6 +804,8 @@ export async function runSandboxAgent(
     ],
     usage: undefined,
   };
+  let invalidBatchRetryUsed = false;
+  let awaitingInvalidBatchRecovery = false;
 
   for (let step = 0; step < MAX_AGENT_STEPS; step += 1) {
     let modelResponse: AIGenerateTextResult;
@@ -649,9 +823,48 @@ export async function runSandboxAgent(
     state.usage = mergeUsage(state.usage, modelResponse.usage);
     logAgentModelResponse(input, "tool", state.stepsUsed, modelResponse);
 
-    const toolCall = modelResponse.toolCalls?.[0];
+    const toolTurn = classifyToolTurn(modelResponse);
 
-    if (!toolCall) {
+    if (toolTurn.status === "invalid_batch") {
+      console.warn("Sandbox agent returned an invalid tool batch:", {
+        issueNumber: input.issueNumber,
+        projectId: input.projectId,
+        reason: toolTurn.reason,
+        step: state.stepsUsed,
+        toolNames: toolTurn.toolCalls.map((toolCall) => toolCall.function.name),
+      });
+
+      if (invalidBatchRetryUsed) {
+        console.error("Sandbox agent invalid batch retry exhausted:", {
+          issueNumber: input.issueNumber,
+          projectId: input.projectId,
+          step: state.stepsUsed,
+        });
+        return buildFailedResult(
+          input,
+          state,
+          "internal_error",
+          "The agent returned an invalid tool batch and could not recover.",
+        );
+      }
+
+      appendAssistantMessage(state, modelResponse.text);
+      appendUserMessage(state, buildMultiToolRetryPrompt());
+      invalidBatchRetryUsed = true;
+      awaitingInvalidBatchRecovery = true;
+      continue;
+    }
+
+    if (awaitingInvalidBatchRecovery) {
+      console.log("Sandbox agent invalid batch retry recovered:", {
+        issueNumber: input.issueNumber,
+        projectId: input.projectId,
+        step: state.stepsUsed,
+      });
+      awaitingInvalidBatchRecovery = false;
+    }
+
+    if (toolTurn.status === "finish") {
       appendAssistantMessage(state, modelResponse.text);
 
       let finishTurnResponse: AIGenerateTextResult;
@@ -690,24 +903,115 @@ export async function runSandboxAgent(
       });
     }
 
-    const toolResult = await executeToolCall(toolCall, input.sessionId);
-    logAgentToolResult(input, state.stepsUsed, toolCall, toolResult);
+    if (toolTurn.status === "single") {
+      const toolCall = toolTurn.toolCalls[0];
+      const toolResult = await executeToolCall(toolCall, input.sessionId);
+      logAgentToolResult(input, state.stepsUsed, toolCall, toolResult);
 
-    pushRecentEvent(state, toolResult.recentEvent);
+      pushRecentEvent(state, toolResult.recentEvent);
 
-    if (toolResult.status === "hard_failure") {
-      return buildFailedResult(input, state, toolResult.code, toolResult.message);
+      if (toolResult.status === "hard_failure") {
+        return buildFailedResult(input, state, toolResult.code, toolResult.message);
+      }
+
+      appendToolMessages(
+        state,
+        [toolCall],
+        [
+          {
+            toolCallId: toolCall.id,
+            toolMessageContent: toolResult.toolMessageContent,
+          },
+        ],
+        modelResponse.text,
+      );
+      state.latestObservation = toolResult.latestObservation;
+
+      if (toolResult.status === "recoverable_failure") {
+        state.recoverableToolErrorCount += 1;
+
+        if (state.recoverableToolErrorCount > 1) {
+          return buildFailedResult(
+            input,
+            state,
+            "tool_retry_exhausted",
+            "The agent could not recover from a repeated tool error.",
+          );
+        }
+
+        continue;
+      }
+
+      state.recoverableToolErrorCount = 0;
+
+      if (toolResult.touchedPath) {
+        state.filesTouched.add(toolResult.touchedPath);
+      }
+
+      if (toolResult.session) {
+        state.latestSession = toolResult.session;
+      }
+
+      continue;
+    }
+
+    const batchResult = await executeReadOnlyBatch(
+      toolTurn.toolCalls,
+      input.sessionId,
+    );
+
+    for (const executedTool of batchResult.executed) {
+      logAgentToolResult(
+        input,
+        state.stepsUsed,
+        executedTool.toolCall,
+        executedTool.result,
+      );
+      pushRecentEvent(state, executedTool.result.recentEvent);
+    }
+
+    if (batchResult.status === "hard_failure") {
+      for (const touchedPath of batchResult.touchedPaths) {
+        state.filesTouched.add(touchedPath);
+      }
+
+      if (batchResult.latestSession) {
+        state.latestSession = batchResult.latestSession;
+      }
+
+      if (batchResult.latestObservation) {
+        state.latestObservation = batchResult.latestObservation;
+      }
+
+      return buildFailedResult(input, state, batchResult.code, batchResult.message);
     }
 
     appendToolMessages(
       state,
-      toolCall,
-      toolResult.toolMessageContent,
+      toolTurn.toolCalls,
+      batchResult.executed.flatMap((executedTool) =>
+        hasToolMessageContent(executedTool.result)
+          ? [
+              {
+                toolCallId: executedTool.toolCall.id,
+                toolMessageContent: executedTool.result.toolMessageContent,
+              },
+            ]
+          : [],
+      ),
       modelResponse.text,
     );
-    state.latestObservation = toolResult.latestObservation;
+    state.latestObservation = batchResult.latestObservation;
 
-    if (toolResult.status === "recoverable_failure") {
+    for (const touchedPath of batchResult.touchedPaths) {
+      state.filesTouched.add(touchedPath);
+    }
+
+    if (batchResult.latestSession) {
+      state.latestSession = batchResult.latestSession;
+    }
+
+    if (batchResult.status === "recoverable_failure") {
       state.recoverableToolErrorCount += 1;
 
       if (state.recoverableToolErrorCount > 1) {
@@ -723,14 +1027,6 @@ export async function runSandboxAgent(
     }
 
     state.recoverableToolErrorCount = 0;
-
-    if (toolResult.touchedPath) {
-      state.filesTouched.add(toolResult.touchedPath);
-    }
-
-    if (toolResult.session) {
-      state.latestSession = toolResult.session;
-    }
   }
 
   return buildAgentResult(input, state, {
