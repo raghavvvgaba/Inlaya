@@ -318,7 +318,7 @@ describe("runSandboxAgent", () => {
 
     expect(result).toMatchObject({
       filesTouched: ["src/data/projects.js"],
-      message: "Inspected the relevant files.",
+      message: "Done inspecting.",
       status: "completed",
       stepsUsed: 3,
     });
@@ -380,7 +380,7 @@ describe("runSandboxAgent", () => {
 
     expect(result).toMatchObject({
       filesTouched: ["src/data/projects.js", "src/pages/ProjectsPage.jsx"],
-      message: "Checked the relevant files and search results.",
+      message: "Done inspecting.",
       status: "completed",
       stepsUsed: 3,
     });
@@ -544,7 +544,7 @@ describe("runSandboxAgent", () => {
 
     expect(result).toMatchObject({
       filesTouched: ["src/a.ts", "src/c.ts"],
-      message: "Finished inspecting despite one missing file.",
+      message: "Done inspecting.",
       status: "completed",
       stepsUsed: 3,
     });
@@ -612,7 +612,7 @@ describe("runSandboxAgent", () => {
 
     expect(result).toMatchObject({
       filesTouched: [],
-      message: "I narrowed the inspection after the timeout and continued.",
+      message: "Done inspecting.",
       status: "completed",
       stepsUsed: 4,
     });
@@ -686,7 +686,7 @@ describe("runSandboxAgent", () => {
 
     expect(result).toMatchObject({
       filesTouched: ["src/app/page.tsx"],
-      message: "I recovered from the timeout by narrowing the directory listing.",
+      message: "Done inspecting.",
       status: "completed",
       stepsUsed: 4,
     });
@@ -748,7 +748,7 @@ describe("runSandboxAgent", () => {
 
     expect(result).toMatchObject({
       filesTouched: ["src/b.ts"],
-      message: "I continued after the tool failure and inspected another file.",
+      message: "Done inspecting.",
       status: "completed",
       stepsUsed: 4,
     });
@@ -818,7 +818,7 @@ describe("runSandboxAgent", () => {
 
     expect(result).toMatchObject({
       filesTouched: ["src/a.ts", "src/c.ts"],
-      message: "I kept inspecting the remaining files after one tool failed.",
+      message: "Done inspecting.",
       status: "completed",
       stepsUsed: 3,
     });
@@ -854,7 +854,7 @@ describe("runSandboxAgent", () => {
       )
       .mockResolvedValueOnce(
         createModelResponse({
-          text: "I'll retry once more.",
+          text: "This prose should not become the final blocked message.",
           toolCalls: [createToolCall("read_file", { path: "src/a.ts" }, "call-3")],
         }),
       )
@@ -978,7 +978,7 @@ describe("runSandboxAgent", () => {
     expect(result).toMatchObject({
       diff: "diff --git a/src/data/projects.js b/src/data/projects.js",
       filesTouched: ["src/components/Hero.jsx"],
-      message: "Updated the hero title.",
+      message: "Done. I updated the hero title.",
       session: mockSession,
       status: "completed",
       stepsUsed: 3,
@@ -1112,7 +1112,7 @@ describe("runSandboxAgent", () => {
 
     expect(result).toMatchObject({
       filesTouched: ["src/components/Hero.jsx"],
-      message: "Updated the hero title after retrying the correct line.",
+      message: "Done. I updated the hero title.",
       status: "completed",
       stepsUsed: 4,
     });
@@ -1168,7 +1168,7 @@ describe("runSandboxAgent", () => {
     expect(result).toMatchObject({
       diff: "diff --git a/src/data/projects.js b/src/data/projects.js",
       filesTouched: ["src/data/projects.js"],
-      message: "Updated the projects data.",
+      message: "Done. I updated the projects data.",
       session: mockSession,
       status: "completed",
       stepsUsed: 3,
@@ -1188,7 +1188,38 @@ describe("runSandboxAgent", () => {
     generateTextMock
       .mockResolvedValueOnce(
         createModelResponse({
-          text: "",
+          text: "Nothing needed to change. The existing implementation already matches the request.",
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: JSON.stringify({
+            message: "Schema finish message.",
+            status: "completed",
+          }),
+        }),
+      );
+
+    const result = await runSandboxAgent(baseInput);
+
+    expect(result).toMatchObject({
+      filesTouched: [],
+      message: "Nothing needed to change. The existing implementation already matches the request.",
+      session: mockSession,
+      status: "completed",
+      stepsUsed: 2,
+    });
+    expect(getModelCall(1)?.messages.at(-1)).toMatchObject({
+      content: expectedFinishPrompt,
+      role: "user",
+    });
+  });
+
+  it("falls back to the finish-turn message when no-tool completion text is empty", async () => {
+    generateTextMock
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "   ",
         }),
       )
       .mockResolvedValueOnce(
@@ -1203,15 +1234,36 @@ describe("runSandboxAgent", () => {
     const result = await runSandboxAgent(baseInput);
 
     expect(result).toMatchObject({
-      filesTouched: [],
       message: "Nothing needed to change.",
-      session: mockSession,
       status: "completed",
       stepsUsed: 2,
     });
-    expect(getModelCall(1)?.messages.at(-1)).toMatchObject({
-      content: expectedFinishPrompt,
-      role: "user",
+  });
+
+  it("uses no-tool completion text while keeping blocked status and clarification from the finish turn", async () => {
+    generateTextMock
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "I need one more detail before changing code.",
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: JSON.stringify({
+            clarificationQuestion: "Which component should I update?",
+            message: "Schema blocked message.",
+            status: "blocked",
+          }),
+        }),
+      );
+
+    const result = await runSandboxAgent(baseInput);
+
+    expect(result).toMatchObject({
+      clarificationQuestion: "Which component should I update?",
+      message: "I need one more detail before changing code.",
+      status: "blocked",
+      stepsUsed: 2,
     });
   });
 

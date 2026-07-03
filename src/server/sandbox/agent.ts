@@ -915,6 +915,7 @@ async function finalizeWithFinishTurn(
   state: AgentRunState,
   finishPrompt: string,
   failureCode?: AgentFailureCode,
+  preferredDisplayMessage?: string,
 ) {
   let finishTurnResponse: AIGenerateTextResult;
 
@@ -948,7 +949,7 @@ async function finalizeWithFinishTurn(
   return buildAgentResult(input, state, {
     clarificationQuestion: finishResponse.clarificationQuestion,
     failureCode,
-    message: finishResponse.message,
+    message: preferredDisplayMessage?.trim() || finishResponse.message,
     status: failureCode ? "blocked" : finishResponse.status,
   });
 }
@@ -1047,7 +1048,13 @@ export async function runSandboxAgent(
 
     if (toolTurn.status === "finish") {
       appendAssistantMessage(state, modelResponse.text);
-      return finalizeWithFinishTurn(input, state, buildAgentFinishPrompt());
+      return finalizeWithFinishTurn(
+        input,
+        state,
+        buildAgentFinishPrompt(),
+        undefined,
+        modelResponse.text,
+      );
     }
 
     if (toolTurn.status === "single") {
