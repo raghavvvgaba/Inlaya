@@ -16,6 +16,7 @@ const {
   getSessionMock,
   listToolExecuteMock,
   readToolExecuteMock,
+  replaceToolExecuteMock,
   runCommandMock,
   searchToolExecuteMock,
   writeToolExecuteMock,
@@ -26,6 +27,7 @@ const {
   getSessionMock: vi.fn(),
   listToolExecuteMock: vi.fn(),
   readToolExecuteMock: vi.fn(),
+  replaceToolExecuteMock: vi.fn(),
   runCommandMock: vi.fn(),
   searchToolExecuteMock: vi.fn(),
   writeToolExecuteMock: vi.fn(),
@@ -63,6 +65,7 @@ vi.mock("~/server/sandbox/tools/model-tools", () => ({
     buildToolDefinition("list_directory", "List files in a directory."),
     buildToolDefinition("read_file", "Read a file from the sandbox."),
     buildToolDefinition("search_code", "Search code in the sandbox."),
+    buildToolDefinition("replace_in_file", "Replace text in a sandbox file."),
     buildToolDefinition("write_file", "Write a file in the sandbox."),
   ],
 }));
@@ -103,6 +106,12 @@ vi.mock("~/server/sandbox/tools/registry", () => ({
           "search_code",
           "Search code in the sandbox.",
           searchToolExecuteMock,
+        );
+      case "replace_in_file":
+        return buildRegistryTool(
+          "replace_in_file",
+          "Replace text in a sandbox file.",
+          replaceToolExecuteMock,
         );
       case "write_file":
         return buildRegistryTool(
@@ -219,6 +228,7 @@ beforeEach(() => {
   getSessionMock.mockReset();
   listToolExecuteMock.mockReset();
   readToolExecuteMock.mockReset();
+  replaceToolExecuteMock.mockReset();
   runCommandMock.mockReset();
   searchToolExecuteMock.mockReset();
   writeToolExecuteMock.mockReset();
@@ -261,6 +271,13 @@ beforeEach(() => {
       },
     ],
     truncated: false,
+  });
+  replaceToolExecuteMock.mockResolvedValue({
+    newText: "Full stack + AI engineer",
+    oldText: "Full stack developer",
+    path: "src/components/Hero.jsx",
+    session: mockSession,
+    startLine: 148,
   });
   writeToolExecuteMock.mockResolvedValue({
     path: "src/data/projects.js",
@@ -921,6 +938,198 @@ describe("runSandboxAgent", () => {
       stepsUsed: 6,
     });
     expect(readToolExecuteMock).toHaveBeenCalledTimes(5);
+  });
+
+  it("runs replace_in_file as a single-call write-like turn", async () => {
+    generateTextMock
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "I'll update the hero title now.",
+          toolCalls: [
+            createToolCall(
+              "replace_in_file",
+              {
+                newText: "Full stack + AI engineer",
+                oldText: "Full stack developer",
+                path: "src/components/Hero.jsx",
+                startLine: 148,
+              },
+              "call-replace",
+            ),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "Done. I updated the hero title.",
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: JSON.stringify({
+            message: "Updated the hero title.",
+            status: "completed",
+          }),
+        }),
+      );
+
+    const result = await runSandboxAgent(baseInput);
+
+    expect(result).toMatchObject({
+      diff: "diff --git a/src/data/projects.js b/src/data/projects.js",
+      filesTouched: ["src/components/Hero.jsx"],
+      message: "Updated the hero title.",
+      session: mockSession,
+      status: "completed",
+      stepsUsed: 3,
+    });
+    expect(replaceToolExecuteMock).toHaveBeenCalledWith(
+      {
+        newText: "Full stack + AI engineer",
+        oldText: "Full stack developer",
+        path: "src/components/Hero.jsx",
+        startLine: 148,
+      },
+      {
+        sessionId: "session-test",
+      },
+    );
+  });
+
+  it("rejects replace_in_file when mixed with read-only tools", async () => {
+    generateTextMock
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "I'll read and replace in the same turn.",
+          toolCalls: [
+            createToolCall("read_file", { path: "src/components/Hero.jsx" }, "call-read"),
+            createToolCall(
+              "replace_in_file",
+              {
+                newText: "Full stack + AI engineer",
+                oldText: "Full stack developer",
+                path: "src/components/Hero.jsx",
+                startLine: 148,
+              },
+              "call-replace",
+            ),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "I'll make the same invalid batch again.",
+          toolCalls: [
+            createToolCall("read_file", { path: "src/components/Hero.jsx" }, "call-read-2"),
+            createToolCall(
+              "replace_in_file",
+              {
+                newText: "Full stack + AI engineer",
+                oldText: "Full stack developer",
+                path: "src/components/Hero.jsx",
+                startLine: 148,
+              },
+              "call-replace-2",
+            ),
+          ],
+        }),
+      );
+
+    const result = await runSandboxAgent(baseInput);
+
+    expect(result).toMatchObject({
+      filesTouched: [],
+      message: "The agent returned an invalid tool batch and could not recover.",
+      status: "failed",
+      stepsUsed: 2,
+    });
+    expect(readToolExecuteMock).not.toHaveBeenCalled();
+    expect(replaceToolExecuteMock).not.toHaveBeenCalled();
+  });
+
+  it("feeds replace_in_file failure back as structured tool JSON and lets the model recover", async () => {
+    replaceToolExecuteMock
+      .mockRejectedValueOnce(new Error("line_text_mismatch"))
+      .mockResolvedValueOnce({
+        newText: "Full stack + AI engineer",
+        oldText: "Full stack developer",
+        path: "src/components/Hero.jsx",
+        session: mockSession,
+        startLine: 149,
+      });
+
+    generateTextMock
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "I'll replace the line I found.",
+          toolCalls: [
+            createToolCall(
+              "replace_in_file",
+              {
+                newText: "Full stack + AI engineer",
+                oldText: "Full stack developer",
+                path: "src/components/Hero.jsx",
+                startLine: 148,
+              },
+              "call-replace-fail",
+            ),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "I'll retry on the corrected line.",
+          toolCalls: [
+            createToolCall(
+              "replace_in_file",
+              {
+                newText: "Full stack + AI engineer",
+                oldText: "Full stack developer",
+                path: "src/components/Hero.jsx",
+                startLine: 149,
+              },
+              "call-replace-retry",
+            ),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "Done. I updated the hero title.",
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: JSON.stringify({
+            message: "Updated the hero title after retrying the correct line.",
+            status: "completed",
+          }),
+        }),
+      );
+
+    const result = await runSandboxAgent(baseInput);
+    const toolMessages = getToolMessages(getFinalModelMessages());
+
+    expect(result).toMatchObject({
+      filesTouched: ["src/components/Hero.jsx"],
+      message: "Updated the hero title after retrying the correct line.",
+      status: "completed",
+      stepsUsed: 4,
+    });
+    expect(replaceToolExecuteMock).toHaveBeenCalledTimes(2);
+    expect(parseToolMessage(toolMessages[0]!)).toMatchObject({
+      arguments: {
+        newText: "Full stack + AI engineer",
+        oldText: "Full stack developer",
+        path: "src/components/Hero.jsx",
+        startLine: 148,
+      },
+      code: "line_text_mismatch",
+      message: "line_text_mismatch",
+      ok: false,
+      retryable: true,
+      tool: "replace_in_file",
+    });
   });
 
   it("keeps write_file as a single-call turn", async () => {

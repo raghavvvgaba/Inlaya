@@ -514,7 +514,7 @@ function classifyToolTurn(response: AIGenerateTextResult): ToolTurnClassificatio
   return {
     reason: allReadOnly
       ? `Too many read-only tool calls were returned (${toolCalls.length}).`
-      : "write_file was mixed with other tools or an unsupported multi-tool combination was returned.",
+      : "A write-like tool was mixed with other tools or an unsupported multi-tool combination was returned.",
     status: "invalid_batch",
     toolCalls,
   };
@@ -652,6 +652,22 @@ async function executeToolCall(
           status: "ok",
           toolMessageContent,
           touchedPath: writeResult.path,
+        };
+      }
+      case "replace_in_file": {
+        const replaceResult = result as {
+          path: string;
+          session: SandboxSession;
+          startLine: number;
+        };
+
+        return {
+          latestObservation: `replace_in_file updated ${replaceResult.path} line ${replaceResult.startLine}.`,
+          recentEvent: `Replaced text in ${replaceResult.path} line ${replaceResult.startLine}.`,
+          session: replaceResult.session,
+          status: "ok",
+          toolMessageContent,
+          touchedPath: replaceResult.path,
         };
       }
     }

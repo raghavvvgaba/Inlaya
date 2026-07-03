@@ -36,3 +36,30 @@ Behavior:
 - more matches may exist
 - v1 does not support pagination
 - caller should narrow query/path and retry
+
+## `replace_in_file`
+
+Purpose: Replace exact text on one inspected line.
+
+Input:
+- `sessionId: string`
+- `path: string`
+- `startLine: number`
+- `oldText: string`
+- `newText: string`
+
+Output:
+- `path: string`
+- `startLine: number`
+- `oldText: string`
+- `newText: string`
+- `session: SandboxSession`
+
+Behavior:
+- `startLine` is 1-based, matching `read_file`
+- reads the current file before writing
+- normalizes line endings to `\n`
+- target line must exist
+- target line must contain `oldText` exactly once
+- writes the full updated file through the sandbox provider
+- use this for targeted line edits instead of full-file `write_file`
