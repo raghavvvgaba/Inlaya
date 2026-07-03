@@ -1,0 +1,6 @@
+A runtime issue occurred and further tool calls will not help.
+Do not call any tools.
+Return JSON only with this shape: {"status":"completed"|"blocked","message":"...","clarificationQuestion":"optional"}
+Use "blocked" as the status.
+Explain the exact issue in user-friendly terms and make clear why the work could not continue.
+Do not include markdown fences or any extra prose.

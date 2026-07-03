@@ -1,0 +1,3 @@
+Your previous response returned an invalid tool batch.
+Return either exactly one write_file call, or up to {{MAX_READ_ONLY_TOOL_CALLS}} read-only tool calls using only list_directory, read_file, and search_code.
+Do not mix write_file with any other tool.
