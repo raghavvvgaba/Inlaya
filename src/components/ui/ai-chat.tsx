@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { Bot, CheckCircle2, Sparkles, TriangleAlert, User2 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import { cn } from "~/lib/utils";
 
@@ -54,6 +56,39 @@ function getMessageLabel(message: AIChatMessage) {
   }
 
   return "System";
+}
+
+function MarkdownMessageBody({
+  body,
+  isUser,
+}: {
+  body: string;
+  isUser: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "min-w-0 break-words text-sm leading-7",
+        isUser ? "text-black/90" : "text-white/90",
+        "[&_a]:font-medium [&_a]:underline [&_a]:underline-offset-4",
+        isUser
+          ? "[&_a]:text-black [&_code]:bg-black/10 [&_pre]:bg-black/10"
+          : "[&_a]:text-cyan-100 [&_code]:bg-white/10 [&_pre]:bg-black/30",
+        "[&_code]:rounded-md [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.92em]",
+        "[&_code]:break-words",
+        "[&_h1]:text-lg [&_h1]:font-semibold [&_h1]:leading-7",
+        "[&_h2]:text-base [&_h2]:font-semibold [&_h2]:leading-7",
+        "[&_hr]:my-4 [&_hr]:border-white/10",
+        "[&_li]:mb-1 [&_li]:break-words [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:space-y-1",
+        "[&_p]:break-words [&_p]:whitespace-pre-wrap [&_p:not(:first-child)]:mt-3",
+        "[&_pre]:max-w-full [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_pre]:break-words [&_pre]:rounded-2xl [&_pre]:border [&_pre]:border-white/10 [&_pre]:p-4",
+        "[&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:whitespace-pre-wrap [&_pre_code]:break-words",
+        "[&_strong]:font-semibold [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:space-y-1",
+      )}
+    >
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{body}</ReactMarkdown>
+    </div>
+  );
 }
 
 export function AIChat({
@@ -132,12 +167,7 @@ export function AIChat({
                           {getMessageLabel(message)}
                         </p>
                       </div>
-                      <p
-                        className={cn(
-                          "whitespace-pre-wrap text-sm leading-7",
-                          isUser ? "text-black/90" : "text-white/90",
-                        )}
-                      >
+                      <div>
                         {message.isThinking ? (
                           <span className="flex items-center gap-2">
                             <span>{message.body}</span>
@@ -148,9 +178,9 @@ export function AIChat({
                             </span>
                           </span>
                         ) : (
-                          message.body
+                          <MarkdownMessageBody body={message.body} isUser={isUser} />
                         )}
-                      </p>
+                      </div>
                     </div>
                   </div>
                 </div>
