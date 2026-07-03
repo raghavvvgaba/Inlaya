@@ -27,7 +27,7 @@ export async function readRawSandboxFile(
   const relativePath = normalizeSandboxRelativePath(input.path);
   const sandboxPath = toSandboxRepoPath(relativePath);
   const content = await session.sandbox!.files.read(sandboxPath, {
-    requestTimeoutMs: 10_000,
+    requestTimeoutMs: 15_000,
   });
 
   return {
@@ -63,7 +63,7 @@ export async function listRawSandboxFiles(
   const relativePath = normalizeSandboxRelativePath(input.path, { allowRoot: true });
   const sandboxPath = toSandboxRepoPath(relativePath);
   const entries = await session.sandbox!.files.list(sandboxPath, {
-    requestTimeoutMs: 10_000,
+    requestTimeoutMs: 20_000,
   });
 
   return entries

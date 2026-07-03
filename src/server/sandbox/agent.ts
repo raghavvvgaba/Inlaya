@@ -27,10 +27,16 @@ import type {
   SandboxSession,
 } from "~/server/sandbox/types";
 
-const MAX_AGENT_STEPS = 8;
+import AGENT_FINISH_PROMPT_TEMPLATE from "./prompts/agent-finish.txt";
+import AGENT_MULTITOOL_RETRY_PROMPT_TEMPLATE from "./prompts/agent-multitool-retry.txt";
+import AGENT_SYSTEM_PROMPT_TEMPLATE from "./prompts/agent-system.txt";
+import AGENT_TERMINAL_FAILURE_FINISH_PROMPT_TEMPLATE from "./prompts/agent-terminal-failure-finish.txt";
+
 const MAX_RECENT_EVENTS = 5;
 const MAX_LIST_DIRECTORY_ENTRIES = 40;
 const MAX_READ_ONLY_TOOL_CALLS = 5;
+const MAX_RECOVERY_TURNS = 5;
+const MAX_SAME_FAILURE_REPEATS = 3;
 
 const sandboxAgentModelTools = buildSandboxAgentModelTools();
 const sandboxAgentToolIds = sandboxAgentModelTools.map(
@@ -55,20 +61,18 @@ type AgentFailureCode =
   | "sandbox_not_running"
   | "tool_retry_exhausted";
 
-type SandboxAgentInternalResult =
-  | ({
-      failureCode?: undefined;
-    } & SandboxAgentResult)
-  | ({
-      failureCode: AgentFailureCode;
-    } & SandboxAgentResult & { status: "failed" });
+type SandboxAgentInternalResult = SandboxAgentResult & {
+  failureCode?: AgentFailureCode;
+};
 
 type AgentRunState = {
   filesTouched: Set<string>;
+  lastFailureSignature?: string;
   latestObservation: string;
   latestSession?: SandboxSession;
   recentEvents: string[];
-  recoverableToolErrorCount: number;
+  recoveryTurnsUsed: number;
+  sameFailureRepeatCount: number;
   stepsUsed: number;
   transcript: AIMessage[];
   usage?: AIUsage;
@@ -82,24 +86,27 @@ type AgentToolSuccess = {
   touchedPath?: string;
 };
 
-type AgentToolRecoverableFailure = {
+type AgentToolFailure = {
+  code: string;
   latestObservation: string;
+  message: string;
   recentEvent: string;
-  status: "recoverable_failure";
+  status: "tool_failure";
+  tool: SandboxAgentToolName;
   toolMessageContent: string;
 };
 
-type AgentToolHardFailure = {
+type AgentToolInternalFatalFailure = {
   code: AgentFailureCode;
   message: string;
   recentEvent: string;
-  status: "hard_failure";
+  status: "internal_fatal_failure";
 };
 
 type AgentToolExecutionResult =
   | ({ status: "ok" } & AgentToolSuccess)
-  | AgentToolRecoverableFailure
-  | AgentToolHardFailure;
+  | AgentToolFailure
+  | AgentToolInternalFatalFailure;
 
 type AgentModelPhase = "tool" | "finish";
 
@@ -131,7 +138,7 @@ type AgentToolBatchResult =
       executed: ExecutedAgentTool[];
       latestObservation: string;
       latestSession?: SandboxSession;
-      status: "ok" | "recoverable_failure";
+      status: "ok" | "tool_failure";
       touchedPaths: string[];
     }
   | {
@@ -140,7 +147,7 @@ type AgentToolBatchResult =
       latestObservation: string;
       latestSession?: SandboxSession;
       message: string;
-      status: "hard_failure";
+      status: "internal_fatal_failure";
       touchedPaths: string[];
     };
 
@@ -148,10 +155,28 @@ function hasToolMessageContent(
   result: AgentToolExecutionResult,
 ): result is Extract<
   AgentToolExecutionResult,
-  { status: "ok" | "recoverable_failure" }
+  {
+    status: "ok" | "tool_failure";
+  }
 > {
   return "toolMessageContent" in result;
 }
+
+type AgentRetryExhaustedResult = {
+  code: AgentFailureCode;
+  latestObservation: string;
+  message: string;
+  recentEvent: string;
+  toolMessageContent: string;
+};
+
+type ToolFailureMessageInput = {
+  argumentsValue: Record<string, unknown>;
+  code: string;
+  message: string;
+  retryable: boolean;
+  tool: SandboxAgentToolName;
+};
 
 function previewText(value: string, maxLength = 220) {
   const normalized = value.trim().replace(/\s+/g, " ");
@@ -171,37 +196,34 @@ function pushRecentEvent(state: AgentRunState, event: string) {
   }
 }
 
+function formatPromptTemplate(
+  template: string,
+  replacements: Record<string, string> = {},
+) {
+  return Object.entries(replacements).reduce(
+    (content, [key, value]) => content.replaceAll(`{{${key}}}`, value),
+    template,
+  ).trim();
+}
+
 function buildAgentSystemPrompt() {
-  return [
-    "You are Devin's bounded coding agent for one sandbox repository.",
-    `You have at most ${MAX_AGENT_STEPS} tool-use turns before the final answer.`,
-    "Respond in English.",
-    `You may return up to ${MAX_READ_ONLY_TOOL_CALLS} tool calls in one turn only when every call is read-only: list_directory, read_file, or search_code.`,
-    "write_file must be used alone.",
-    "Search or inspect before editing when the target is unclear.",
-    "Prefer bounded reads first.",
-    "Request a full-file read only immediately before writing that file.",
-    "Only write files you have already inspected.",
-    "If the request is unclear or unsupported, answer with JSON containing status, message, and an optional clarificationQuestion.",
-    "Do not invent tools, files, commands, or multi-action turns.",
-  ].join("\n");
+  return formatPromptTemplate(AGENT_SYSTEM_PROMPT_TEMPLATE, {
+    MAX_READ_ONLY_TOOL_CALLS: String(MAX_READ_ONLY_TOOL_CALLS),
+  });
 }
 
 function buildAgentFinishPrompt() {
-  return [
-    "Do not call any tools.",
-    "Return the final result as JSON only.",
-    'Use this shape: {"status":"completed"|"blocked","message":"...","clarificationQuestion":"optional"}',
-    "Do not include markdown fences or any extra prose.",
-  ].join("\n");
+  return formatPromptTemplate(AGENT_FINISH_PROMPT_TEMPLATE);
+}
+
+function buildTerminalFailureFinishPrompt() {
+  return formatPromptTemplate(AGENT_TERMINAL_FAILURE_FINISH_PROMPT_TEMPLATE);
 }
 
 function buildMultiToolRetryPrompt() {
-  return [
-    "Your previous response returned an invalid tool batch.",
-    `Return either exactly one write_file call, or up to ${MAX_READ_ONLY_TOOL_CALLS} read-only tool calls using only list_directory, read_file, and search_code.`,
-    "Do not mix write_file with any other tool.",
-  ].join("\n");
+  return formatPromptTemplate(AGENT_MULTITOOL_RETRY_PROMPT_TEMPLATE, {
+    MAX_READ_ONLY_TOOL_CALLS: String(MAX_READ_ONLY_TOOL_CALLS),
+  });
 }
 
 function buildAgentUserPrompt(input: SandboxAgentInput) {
@@ -270,35 +292,36 @@ function normalizeToolErrorMessage(error: unknown) {
   return "unknown_tool_error";
 }
 
-function isRecoverableToolError(message: string) {
-  return (
-    message === "file_too_large" ||
-    message === "invalid_tool_arguments_json" ||
-    message === "invalid_line_range" ||
-    message === "invalid_path" ||
-    message === "missing_path" ||
-    message === "missing_query" ||
-    message.includes("ENOENT") ||
-    message.includes("No such file") ||
-    message.includes("not found")
-  );
+function buildToolFailureMessageContent(input: ToolFailureMessageInput) {
+  return JSON.stringify({
+    arguments: input.argumentsValue,
+    code: input.code,
+    message: input.message,
+    ok: false,
+    retryable: input.retryable,
+    tool: input.tool,
+  });
 }
 
-function mapHardToolFailure(message: string): AgentToolHardFailure {
-  if (message === "Sandbox is not running.") {
-    return {
-      code: "sandbox_not_running",
-      message: "The sandbox is not running.",
-      recentEvent: "A tool failed because the sandbox is not running.",
-      status: "hard_failure",
-    };
-  }
-
+function buildToolFailureResult(
+  tool: SandboxAgentToolName,
+  message: string,
+  argumentsValue: Record<string, unknown>,
+): AgentToolFailure {
   return {
-    code: "internal_error",
-    message: "The agent could not continue because a sandbox tool failed.",
-    recentEvent: `A tool failed unexpectedly: ${message}`,
-    status: "hard_failure",
+    code: message,
+    latestObservation: formatToolFeedback(tool, message),
+    message,
+    recentEvent: `${tool} failed: ${message}.`,
+    status: "tool_failure",
+    tool,
+    toolMessageContent: buildToolFailureMessageContent({
+      argumentsValue,
+      code: message,
+      message,
+      retryable: true,
+      tool,
+    }),
   };
 }
 
@@ -342,6 +365,48 @@ function formatToolFeedback(tool: SandboxAgentToolName, message: string) {
     `Error: ${message}`,
     "Fix the tool arguments or choose a different next step.",
   ].join("\n");
+}
+
+function buildFailureSignature(
+  tool: SandboxAgentToolName,
+  code: string,
+  argumentsValue: Record<string, unknown>,
+) {
+  return `${tool}:${code}:${JSON.stringify(argumentsValue)}`;
+}
+
+function buildFailureTurnSignature(signatures: string[]) {
+  return Array.from(new Set(signatures)).sort().join("||");
+}
+
+function parseToolCallArguments(toolCall: AIToolCall): Record<string, unknown> {
+  try {
+    return JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
+  } catch {
+    return { _raw: toolCall.function.arguments };
+  }
+}
+
+function buildRetryExhaustedResult(
+  tool: SandboxAgentToolName,
+  argumentsValue: Record<string, unknown>,
+): AgentRetryExhaustedResult {
+  return {
+    code: "tool_retry_exhausted",
+    latestObservation: [
+      `The previous ${tool} call could not be recovered after several retries.`,
+      "Stop using tools and explain the repeated failure to the user.",
+    ].join("\n"),
+    message: "The agent could not recover from a repeated tool error.",
+    recentEvent: `The recovery budget was exhausted for ${tool}.`,
+    toolMessageContent: buildToolFailureMessageContent({
+      argumentsValue,
+      code: "tool_retry_exhausted",
+      message: "The agent could not recover from a repeated tool error.",
+      retryable: false,
+      tool,
+    }),
+  };
 }
 
 function logAgentModelResponse(
@@ -489,13 +554,14 @@ async function callAgentToolTurn(
 
 async function callAgentFinishTurn(
   state: AgentRunState,
+  finishPrompt = buildAgentFinishPrompt(),
 ): Promise<AIGenerateTextResult> {
   return aiProvider.generateText({
     maxTokens: 1_500,
     messages: [
       ...state.transcript,
       {
-        content: buildAgentFinishPrompt(),
+        content: finishPrompt,
         role: "user",
       },
     ],
@@ -521,7 +587,7 @@ async function executeToolCall(
       code: "internal_error",
       message: "The agent could not continue because a sandbox tool was missing.",
       recentEvent: `A tool was requested but not found: ${toolCall.function.name}`,
-      status: "hard_failure",
+      status: "internal_fatal_failure",
     };
   }
 
@@ -533,7 +599,7 @@ async function executeToolCall(
       code: "internal_error",
       message: "The agent could not continue because a sandbox tool was missing.",
       recentEvent: `A tool was requested but not found: ${toolName}`,
-      status: "hard_failure",
+      status: "internal_fatal_failure",
     };
   }
 
@@ -594,27 +660,19 @@ async function executeToolCall(
       code: "internal_error",
       message: "The agent could not continue because a sandbox tool was not handled.",
       recentEvent: `A tool completed but had no formatter: ${toolName}`,
-      status: "hard_failure",
+      status: "internal_fatal_failure",
     };
   } catch (error) {
+    const argumentsValue =
+      error instanceof SyntaxError
+        ? { _raw: toolCall.function.arguments }
+        : parseToolCallArguments(toolCall);
     const message =
       error instanceof SyntaxError
         ? "invalid_tool_arguments_json"
         : normalizeToolErrorMessage(error);
 
-    if (isRecoverableToolError(message)) {
-      return {
-        latestObservation: formatToolFeedback(toolName, message),
-        recentEvent: `${toolName} failed with a recoverable error: ${message}.`,
-        status: "recoverable_failure",
-        toolMessageContent: JSON.stringify({
-          error: message,
-          ok: false,
-        }),
-      };
-    }
-
-    return mapHardToolFailure(message);
+    return buildToolFailureResult(toolName, message, argumentsValue);
   }
 }
 
@@ -690,6 +748,64 @@ function buildBatchObservation(executed: ExecutedAgentTool[]) {
   return observationParts.join("\n\n");
 }
 
+function getToolFailures(executed: ExecutedAgentTool[]) {
+  return executed.filter(
+    (item): item is {
+      result: AgentToolFailure;
+      toolCall: AIToolCall;
+    } => item.result.status === "tool_failure",
+  );
+}
+
+function registerRecoveryAttempt(
+  state: AgentRunState,
+  toolFailures: Array<{
+    result: AgentToolFailure;
+    toolCall: AIToolCall;
+  }>,
+) {
+  state.recoveryTurnsUsed += 1;
+
+  const signatures = toolFailures.map((item) =>
+    buildFailureSignature(
+      item.result.tool,
+      item.result.code,
+      parseToolCallArguments(item.toolCall),
+    ),
+  );
+  const turnSignature = buildFailureTurnSignature(signatures);
+
+  if (state.lastFailureSignature === turnSignature) {
+    state.sameFailureRepeatCount += 1;
+  } else {
+    state.lastFailureSignature = turnSignature;
+    state.sameFailureRepeatCount = 1;
+  }
+
+  if (state.recoveryTurnsUsed >= MAX_RECOVERY_TURNS) {
+    const firstFailure = toolFailures[0]!;
+    return buildRetryExhaustedResult(
+      firstFailure.result.tool,
+      parseToolCallArguments(firstFailure.toolCall),
+    );
+  }
+
+  if (state.sameFailureRepeatCount >= MAX_SAME_FAILURE_REPEATS) {
+    const firstFailure = toolFailures[0]!;
+    return buildRetryExhaustedResult(
+      firstFailure.result.tool,
+      parseToolCallArguments(firstFailure.toolCall),
+    );
+  }
+
+  return null;
+}
+
+function resetRecoveryTracking(state: AgentRunState) {
+  state.lastFailureSignature = undefined;
+  state.sameFailureRepeatCount = 0;
+}
+
 async function executeReadOnlyBatch(
   toolCalls: AIToolCall[],
   sessionId: string,
@@ -697,7 +813,7 @@ async function executeReadOnlyBatch(
   const executed: ExecutedAgentTool[] = [];
   const touchedPaths: string[] = [];
   let latestSession: SandboxSession | undefined;
-  let hadRecoverableFailure = false;
+  let hadToolFailure = false;
 
   for (const toolCall of toolCalls) {
     const result = await executeToolCall(toolCall, sessionId);
@@ -714,21 +830,20 @@ async function executeReadOnlyBatch(
       latestSession = result.session;
     }
 
-    if (result.status === "recoverable_failure") {
-      hadRecoverableFailure = true;
-      continue;
-    }
-
-    if (result.status === "hard_failure") {
+    if (result.status === "internal_fatal_failure") {
       return {
         code: result.code,
         executed,
         latestObservation: buildBatchObservation(executed),
         latestSession,
         message: result.message,
-        status: "hard_failure",
+        status: "internal_fatal_failure",
         touchedPaths,
       };
+    }
+
+    if (result.status === "tool_failure") {
+      hadToolFailure = true;
     }
   }
 
@@ -736,7 +851,7 @@ async function executeReadOnlyBatch(
     executed,
     latestObservation: buildBatchObservation(executed),
     latestSession,
-    status: hadRecoverableFailure ? "recoverable_failure" : "ok",
+    status: hadToolFailure ? "tool_failure" : "ok",
     touchedPaths,
   };
 }
@@ -744,7 +859,12 @@ async function executeReadOnlyBatch(
 async function buildAgentResult(
   input: SandboxAgentInput,
   state: AgentRunState,
-  result: Omit<SandboxAgentResult, "diff" | "filesTouched" | "session" | "stepsUsed">,
+  result: Omit<
+    SandboxAgentResult,
+    "diff" | "filesTouched" | "session" | "stepsUsed"
+  > & {
+    failureCode?: AgentFailureCode;
+  },
 ): Promise<SandboxAgentInternalResult> {
   return {
     ...result,
@@ -774,6 +894,49 @@ async function buildFailedResult(
   };
 }
 
+async function finalizeWithFinishTurn(
+  input: SandboxAgentInput,
+  state: AgentRunState,
+  finishPrompt: string,
+  failureCode?: AgentFailureCode,
+) {
+  let finishTurnResponse: AIGenerateTextResult;
+
+  try {
+    finishTurnResponse = await callAgentFinishTurn(state, finishPrompt);
+  } catch (error) {
+    console.error("Sandbox agent finish turn failed:", error);
+    const mappedError = mapModelError(error);
+
+    return buildFailedResult(input, state, mappedError.code, mappedError.message);
+  }
+
+  state.stepsUsed += 1;
+  state.usage = mergeUsage(state.usage, finishTurnResponse.usage);
+  logAgentModelResponse(input, "finish", state.stepsUsed, finishTurnResponse);
+
+  let finishResponse: z.infer<typeof finishSchema>;
+
+  try {
+    finishResponse = parseFinishResponse(finishTurnResponse.text);
+  } catch (error) {
+    console.error("Sandbox agent finish response was invalid:", error);
+    return buildFailedResult(
+      input,
+      state,
+      "internal_error",
+      "The agent returned an invalid completion response.",
+    );
+  }
+
+  return buildAgentResult(input, state, {
+    clarificationQuestion: finishResponse.clarificationQuestion,
+    failureCode,
+    message: finishResponse.message,
+    status: failureCode ? "blocked" : finishResponse.status,
+  });
+}
+
 export async function runSandboxAgent(
   input: SandboxAgentInput,
 ): Promise<SandboxAgentInternalResult> {
@@ -788,9 +951,11 @@ export async function runSandboxAgent(
 
   const state: AgentRunState = {
     filesTouched: new Set<string>(),
+    lastFailureSignature: undefined,
     latestObservation: "No tool has been called yet.",
     recentEvents: [],
-    recoverableToolErrorCount: 0,
+    recoveryTurnsUsed: 0,
+    sameFailureRepeatCount: 0,
     stepsUsed: 0,
     transcript: [
       {
@@ -807,7 +972,7 @@ export async function runSandboxAgent(
   let invalidBatchRetryUsed = false;
   let awaitingInvalidBatchRecovery = false;
 
-  for (let step = 0; step < MAX_AGENT_STEPS; step += 1) {
+  while (true) {
     let modelResponse: AIGenerateTextResult;
 
     try {
@@ -866,41 +1031,7 @@ export async function runSandboxAgent(
 
     if (toolTurn.status === "finish") {
       appendAssistantMessage(state, modelResponse.text);
-
-      let finishTurnResponse: AIGenerateTextResult;
-
-      try {
-        finishTurnResponse = await callAgentFinishTurn(state);
-      } catch (error) {
-        console.error("Sandbox agent finish turn failed:", error);
-        const mappedError = mapModelError(error);
-
-        return buildFailedResult(input, state, mappedError.code, mappedError.message);
-      }
-
-      state.stepsUsed += 1;
-      state.usage = mergeUsage(state.usage, finishTurnResponse.usage);
-      logAgentModelResponse(input, "finish", state.stepsUsed, finishTurnResponse);
-
-      let finishResponse: z.infer<typeof finishSchema>;
-
-      try {
-        finishResponse = parseFinishResponse(finishTurnResponse.text);
-      } catch (error) {
-        console.error("Sandbox agent finish response was invalid:", error);
-        return buildFailedResult(
-          input,
-          state,
-          "internal_error",
-          "The agent returned an invalid completion response.",
-        );
-      }
-
-      return buildAgentResult(input, state, {
-        clarificationQuestion: finishResponse.clarificationQuestion,
-        message: finishResponse.message,
-        status: finishResponse.status,
-      });
+      return finalizeWithFinishTurn(input, state, buildAgentFinishPrompt());
     }
 
     if (toolTurn.status === "single") {
@@ -910,7 +1041,7 @@ export async function runSandboxAgent(
 
       pushRecentEvent(state, toolResult.recentEvent);
 
-      if (toolResult.status === "hard_failure") {
+      if (toolResult.status === "internal_fatal_failure") {
         return buildFailedResult(input, state, toolResult.code, toolResult.message);
       }
 
@@ -927,22 +1058,35 @@ export async function runSandboxAgent(
       );
       state.latestObservation = toolResult.latestObservation;
 
-      if (toolResult.status === "recoverable_failure") {
-        state.recoverableToolErrorCount += 1;
+      if (toolResult.status === "tool_failure") {
+        const exhaustedFailure = registerRecoveryAttempt(state, [
+          { result: toolResult, toolCall },
+        ]);
 
-        if (state.recoverableToolErrorCount > 1) {
-          return buildFailedResult(
+        if (exhaustedFailure) {
+          pushRecentEvent(state, exhaustedFailure.recentEvent);
+          state.latestObservation = exhaustedFailure.latestObservation;
+          appendUserMessage(
+            state,
+            [
+              "Recovery for the previous retryable tool failure is exhausted.",
+              exhaustedFailure.toolMessageContent,
+              "Explain the issue to the user and stop.",
+            ].join("\n"),
+          );
+
+          return finalizeWithFinishTurn(
             input,
             state,
-            "tool_retry_exhausted",
-            "The agent could not recover from a repeated tool error.",
+            buildTerminalFailureFinishPrompt(),
+            exhaustedFailure.code,
           );
         }
 
         continue;
       }
 
-      state.recoverableToolErrorCount = 0;
+      resetRecoveryTracking(state);
 
       if (toolResult.touchedPath) {
         state.filesTouched.add(toolResult.touchedPath);
@@ -970,7 +1114,7 @@ export async function runSandboxAgent(
       pushRecentEvent(state, executedTool.result.recentEvent);
     }
 
-    if (batchResult.status === "hard_failure") {
+    if (batchResult.status === "internal_fatal_failure") {
       for (const touchedPath of batchResult.touchedPaths) {
         state.filesTouched.add(touchedPath);
       }
@@ -1011,26 +1155,34 @@ export async function runSandboxAgent(
       state.latestSession = batchResult.latestSession;
     }
 
-    if (batchResult.status === "recoverable_failure") {
-      state.recoverableToolErrorCount += 1;
+    if (batchResult.status === "tool_failure") {
+      const exhaustedFailure = registerRecoveryAttempt(
+        state,
+        getToolFailures(batchResult.executed),
+      );
 
-      if (state.recoverableToolErrorCount > 1) {
-        return buildFailedResult(
+      if (exhaustedFailure) {
+        pushRecentEvent(state, exhaustedFailure.recentEvent);
+        appendUserMessage(
+          state,
+          [
+            "Recovery for the previous retryable tool failures is exhausted.",
+            exhaustedFailure.toolMessageContent,
+            "Explain the issue to the user and stop.",
+          ].join("\n"),
+        );
+
+        return finalizeWithFinishTurn(
           input,
           state,
-          "tool_retry_exhausted",
-          "The agent could not recover from a repeated tool error.",
+          buildTerminalFailureFinishPrompt(),
+          exhaustedFailure.code,
         );
       }
 
       continue;
     }
 
-    state.recoverableToolErrorCount = 0;
+    resetRecoveryTracking(state);
   }
-
-  return buildAgentResult(input, state, {
-    message: "The agent reached its step limit before finishing.",
-    status: "max_steps_reached",
-  });
 }

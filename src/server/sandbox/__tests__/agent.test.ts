@@ -7,6 +7,9 @@ import type {
   AIToolCall,
 } from "~/server/ai/types";
 import type { SandboxAgentInput, SandboxSession } from "~/server/sandbox/types";
+import AGENT_FINISH_PROMPT_TEMPLATE from "../prompts/agent-finish.txt";
+import AGENT_MULTITOOL_RETRY_PROMPT_TEMPLATE from "../prompts/agent-multitool-retry.txt";
+import AGENT_SYSTEM_PROMPT_TEMPLATE from "../prompts/agent-system.txt";
 
 const {
   generateTextMock,
@@ -165,6 +168,12 @@ function getFinalModelMessages() {
   return (finalCall?.messages ?? []) as AIMessage[];
 }
 
+function getModelCall(index: number) {
+  return generateTextMock.mock.calls[index]?.[0] as
+    | AIGenerateTextInput
+    | undefined;
+}
+
 function getAssistantToolCallMessage(messages: AIMessage[]) {
   return messages.find(
     (message) => message.role === "assistant" && "tool_calls" in message,
@@ -174,6 +183,36 @@ function getAssistantToolCallMessage(messages: AIMessage[]) {
 function getToolMessages(messages: AIMessage[]) {
   return messages.filter((message) => message.role === "tool");
 }
+
+function parseToolMessage(message: AIMessage) {
+  return JSON.parse((message as { content: string }).content) as Record<
+    string,
+    unknown
+  >;
+}
+
+function formatPromptTemplate(
+  template: string,
+  replacements: Record<string, string> = {},
+) {
+  return Object.entries(replacements).reduce(
+    (content, [key, value]) => content.replaceAll(`{{${key}}}`, value),
+    template,
+  ).trim();
+}
+
+const expectedSystemPrompt = formatPromptTemplate(AGENT_SYSTEM_PROMPT_TEMPLATE, {
+  MAX_READ_ONLY_TOOL_CALLS: "5",
+});
+
+const expectedFinishPrompt = formatPromptTemplate(AGENT_FINISH_PROMPT_TEMPLATE);
+
+const expectedMultiToolRetryPrompt = formatPromptTemplate(
+  AGENT_MULTITOOL_RETRY_PROMPT_TEMPLATE,
+  {
+    MAX_READ_ONLY_TOOL_CALLS: "5",
+  },
+);
 
 beforeEach(() => {
   generateTextMock.mockReset();
@@ -285,6 +324,10 @@ describe("runSandboxAgent", () => {
       role: "tool",
       tool_call_id: "call-read",
     });
+    expect(getModelCall(0)?.messages[0]).toMatchObject({
+      content: expectedSystemPrompt,
+      role: "system",
+    });
   });
 
   it("accepts up to five read-only tool calls in one turn", async () => {
@@ -379,13 +422,10 @@ describe("runSandboxAgent", () => {
       stepsUsed: 2,
     });
     expect(readToolExecuteMock).not.toHaveBeenCalled();
-    expect(
-      retryMessages.some(
-        (message) =>
-          message.role === "user" &&
-          message.content.includes("up to 5 read-only tool calls"),
-      ),
-    ).toBe(true);
+    expect(retryMessages.at(-1)).toMatchObject({
+      content: expectedMultiToolRetryPrompt,
+      role: "user",
+    });
   });
 
   it("rejects write_file when mixed with read-only tools", async () => {
@@ -435,7 +475,7 @@ describe("runSandboxAgent", () => {
     expect(writeToolExecuteMock).not.toHaveBeenCalled();
   });
 
-  it("runs all read-only calls in a batch even when one returns a recoverable failure", async () => {
+  it("runs all read-only calls in a batch even when one returns a tool failure", async () => {
     readToolExecuteMock
       .mockResolvedValueOnce({
         content: "content for src/a.ts",
@@ -497,12 +537,219 @@ describe("runSandboxAgent", () => {
       role: "tool",
       tool_call_id: "call-b",
     });
-    expect((finalToolMessages[1] as { content: string }).content).toContain(
-      "\"ok\":false",
-    );
+    expect(parseToolMessage(finalToolMessages[1]!)).toMatchObject({
+      arguments: {
+        path: "src/b.ts",
+      },
+      code: "missing_path",
+      message: "missing_path",
+      ok: false,
+      retryable: true,
+      tool: "read_file",
+    });
   });
 
-  it("stops a read-only batch immediately on a hard failure", async () => {
+  it("feeds a single-tool timeout back to the model and lets it retry", async () => {
+    listToolExecuteMock
+      .mockRejectedValueOnce(
+        new Error("2: [unknown] The operation was aborted due to timeout"),
+      )
+      .mockResolvedValueOnce([
+        {
+          name: "src",
+          path: "src",
+          type: "dir",
+        },
+      ]);
+
+    generateTextMock
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "I'll list the repository root first.",
+          toolCalls: [createToolCall("list_directory", { path: "." }, "call-timeout")],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "I'll narrow the listing to src instead.",
+          toolCalls: [createToolCall("list_directory", { path: "src" }, "call-retry")],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "Done inspecting.",
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: JSON.stringify({
+            message: "I narrowed the inspection after the timeout and continued.",
+            status: "completed",
+          }),
+        }),
+      );
+
+    const result = await runSandboxAgent(baseInput);
+    const finalMessages = getFinalModelMessages();
+    const toolMessages = getToolMessages(finalMessages);
+
+    expect(result).toMatchObject({
+      filesTouched: [],
+      message: "I narrowed the inspection after the timeout and continued.",
+      status: "completed",
+      stepsUsed: 4,
+    });
+    expect(listToolExecuteMock).toHaveBeenCalledTimes(2);
+    expect(toolMessages).toHaveLength(2);
+    expect(parseToolMessage(toolMessages[0]!)).toMatchObject({
+      arguments: {
+        path: ".",
+      },
+      code: "2: [unknown] The operation was aborted due to timeout",
+      message: "2: [unknown] The operation was aborted due to timeout",
+      ok: false,
+      retryable: true,
+      tool: "list_directory",
+    });
+  });
+
+  it("feeds a batch timeout back to the model and gives it another turn", async () => {
+    listToolExecuteMock
+      .mockRejectedValueOnce(new Error("The operation timed out while listing files."))
+      .mockResolvedValueOnce([
+        {
+          name: "components",
+          path: "src/components",
+          type: "dir",
+        },
+      ]);
+    readToolExecuteMock.mockResolvedValueOnce({
+      content: "content for src/app/page.tsx",
+      endLine: 4,
+      path: "src/app/page.tsx",
+      size: 120,
+      startLine: 1,
+      totalLines: 4,
+      truncated: false,
+    });
+
+    generateTextMock
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "I'll inspect the root and the page file.",
+          toolCalls: [
+            createToolCall("list_directory", { path: "." }, "call-list-timeout"),
+            createToolCall("read_file", { path: "src/app/page.tsx" }, "call-read-ok"),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "I'll retry the directory listing with a narrower path.",
+          toolCalls: [createToolCall("list_directory", { path: "src" }, "call-list-retry")],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "Done inspecting.",
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: JSON.stringify({
+            message: "I recovered from the timeout by narrowing the directory listing.",
+            status: "completed",
+          }),
+        }),
+      );
+
+    const result = await runSandboxAgent(baseInput);
+    const finalMessages = getFinalModelMessages();
+    const toolMessages = getToolMessages(finalMessages);
+
+    expect(result).toMatchObject({
+      filesTouched: ["src/app/page.tsx"],
+      message: "I recovered from the timeout by narrowing the directory listing.",
+      status: "completed",
+      stepsUsed: 4,
+    });
+    expect(toolMessages).toHaveLength(3);
+    expect(parseToolMessage(toolMessages[0]!)).toMatchObject({
+      arguments: {
+        path: ".",
+      },
+      code: "The operation timed out while listing files.",
+      message: "The operation timed out while listing files.",
+      ok: false,
+      retryable: true,
+      tool: "list_directory",
+    });
+  });
+
+  it("feeds sandbox-not-running back like any other tool failure and gives the model another turn", async () => {
+    readToolExecuteMock
+      .mockRejectedValueOnce(new Error("Sandbox is not running."))
+      .mockResolvedValueOnce({
+        content: "content for src/b.ts",
+        endLine: 4,
+        path: "src/b.ts",
+        size: 120,
+        startLine: 1,
+        totalLines: 4,
+        truncated: false,
+      });
+
+    generateTextMock
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "I'll inspect the file first.",
+          toolCalls: [createToolCall("read_file", { path: "src/a.ts" }, "call-a")],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "That failed, so I'll inspect a different file.",
+          toolCalls: [createToolCall("read_file", { path: "src/b.ts" }, "call-b")],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "Done inspecting.",
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: JSON.stringify({
+            message: "I continued after the tool failure and inspected another file.",
+            status: "completed",
+          }),
+        }),
+      );
+
+    const result = await runSandboxAgent(baseInput);
+    const finalToolMessages = getToolMessages(getFinalModelMessages());
+
+    expect(result).toMatchObject({
+      filesTouched: ["src/b.ts"],
+      message: "I continued after the tool failure and inspected another file.",
+      status: "completed",
+      stepsUsed: 4,
+    });
+    expect(readToolExecuteMock).toHaveBeenCalledTimes(2);
+    expect(finalToolMessages).toHaveLength(2);
+    expect(parseToolMessage(finalToolMessages[0]!)).toMatchObject({
+      arguments: {
+        path: "src/a.ts",
+      },
+      code: "Sandbox is not running.",
+      message: "Sandbox is not running.",
+      ok: false,
+      retryable: true,
+      tool: "read_file",
+    });
+  });
+
+  it("keeps a read-only batch going when one tool reports sandbox not running", async () => {
     readToolExecuteMock
       .mockResolvedValueOnce({
         content: "content for src/a.ts",
@@ -513,28 +760,167 @@ describe("runSandboxAgent", () => {
         totalLines: 4,
         truncated: false,
       })
-      .mockRejectedValueOnce(new Error("Sandbox is not running."));
+      .mockRejectedValueOnce(new Error("Sandbox is not running."))
+      .mockResolvedValueOnce({
+        content: "content for src/c.ts",
+        endLine: 4,
+        path: "src/c.ts",
+        size: 120,
+        startLine: 1,
+        totalLines: 4,
+        truncated: false,
+      });
 
-    generateTextMock.mockResolvedValueOnce(
-      createModelResponse({
-        text: "I'll inspect the likely files first.",
-        toolCalls: [
-          createToolCall("read_file", { path: "src/a.ts" }, "call-a"),
-          createToolCall("read_file", { path: "src/b.ts" }, "call-b"),
-          createToolCall("read_file", { path: "src/c.ts" }, "call-c"),
-        ],
-      }),
-    );
+    generateTextMock
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "I'll inspect the likely files first.",
+          toolCalls: [
+            createToolCall("read_file", { path: "src/a.ts" }, "call-a"),
+            createToolCall("read_file", { path: "src/b.ts" }, "call-b"),
+            createToolCall("read_file", { path: "src/c.ts" }, "call-c"),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "Done inspecting.",
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: JSON.stringify({
+            message: "I kept inspecting the remaining files after one tool failed.",
+            status: "completed",
+          }),
+        }),
+      );
+
+    const result = await runSandboxAgent(baseInput);
+    const finalToolMessages = getToolMessages(getFinalModelMessages());
+
+    expect(result).toMatchObject({
+      filesTouched: ["src/a.ts", "src/c.ts"],
+      message: "I kept inspecting the remaining files after one tool failed.",
+      status: "completed",
+      stepsUsed: 3,
+    });
+    expect(readToolExecuteMock).toHaveBeenCalledTimes(3);
+    expect(finalToolMessages).toHaveLength(3);
+    expect(parseToolMessage(finalToolMessages[1]!)).toMatchObject({
+      arguments: {
+        path: "src/b.ts",
+      },
+      code: "Sandbox is not running.",
+      message: "Sandbox is not running.",
+      ok: false,
+      retryable: true,
+      tool: "read_file",
+    });
+  });
+
+  it("stops after the same tool failure repeats three times", async () => {
+    readToolExecuteMock.mockRejectedValue(new Error("missing_path"));
+
+    generateTextMock
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "I'll inspect the file.",
+          toolCalls: [createToolCall("read_file", { path: "src/a.ts" }, "call-1")],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "I'll retry the same file read.",
+          toolCalls: [createToolCall("read_file", { path: "src/a.ts" }, "call-2")],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "I'll retry once more.",
+          toolCalls: [createToolCall("read_file", { path: "src/a.ts" }, "call-3")],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: JSON.stringify({
+            message: "I could not recover from the repeated read failure.",
+            status: "blocked",
+          }),
+        }),
+      );
+
+    const result = await runSandboxAgent(baseInput);
+    const finalMessages = getFinalModelMessages();
+
+    expect(result).toMatchObject({
+      failureCode: "tool_retry_exhausted",
+      message: "I could not recover from the repeated read failure.",
+      status: "blocked",
+      stepsUsed: 4,
+    });
+    expect(readToolExecuteMock).toHaveBeenCalledTimes(3);
+    expect(
+      finalMessages.some(
+        (message) =>
+          message.role === "user" &&
+          message.content.includes("\"code\":\"tool_retry_exhausted\""),
+      ),
+    ).toBe(true);
+  });
+
+  it("stops after five tool-failure recovery turns even when the failing arguments keep changing", async () => {
+    readToolExecuteMock.mockRejectedValue(new Error("missing_path"));
+
+    generateTextMock
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "Try file a.",
+          toolCalls: [createToolCall("read_file", { path: "src/a.ts" }, "call-1")],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "Try file b.",
+          toolCalls: [createToolCall("read_file", { path: "src/b.ts" }, "call-2")],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "Try file c.",
+          toolCalls: [createToolCall("read_file", { path: "src/c.ts" }, "call-3")],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "Try file d.",
+          toolCalls: [createToolCall("read_file", { path: "src/d.ts" }, "call-4")],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "Try file e.",
+          toolCalls: [createToolCall("read_file", { path: "src/e.ts" }, "call-5")],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: JSON.stringify({
+            message: "I hit the recovery limit while trying different file reads.",
+            status: "blocked",
+          }),
+        }),
+      );
 
     const result = await runSandboxAgent(baseInput);
 
     expect(result).toMatchObject({
-      filesTouched: ["src/a.ts"],
-      message: "The sandbox is not running.",
-      status: "failed",
-      stepsUsed: 1,
+      failureCode: "tool_retry_exhausted",
+      message: "I hit the recovery limit while trying different file reads.",
+      status: "blocked",
+      stepsUsed: 6,
     });
-    expect(readToolExecuteMock).toHaveBeenCalledTimes(2);
+    expect(readToolExecuteMock).toHaveBeenCalledTimes(5);
   });
 
   it("keeps write_file as a single-call turn", async () => {
@@ -614,5 +1000,52 @@ describe("runSandboxAgent", () => {
       status: "completed",
       stepsUsed: 2,
     });
+    expect(getModelCall(1)?.messages.at(-1)).toMatchObject({
+      content: expectedFinishPrompt,
+      role: "user",
+    });
+  });
+
+  it("fails immediately for an unknown tool request", async () => {
+    generateTextMock.mockResolvedValueOnce(
+      createModelResponse({
+        text: "I'll call a tool that does not exist.",
+        toolCalls: [createToolCall("unknown_tool", {}, "call-unknown")],
+      }),
+    );
+
+    const result = await runSandboxAgent(baseInput);
+
+    expect(result).toMatchObject({
+      failureCode: "internal_error",
+      message: "The agent could not continue because a sandbox tool was missing.",
+      status: "failed",
+      stepsUsed: 1,
+    });
+    expect(generateTextMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails when the finish response is not valid JSON", async () => {
+    generateTextMock
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "",
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "not json",
+        }),
+      );
+
+    const result = await runSandboxAgent(baseInput);
+
+    expect(result).toMatchObject({
+      failureCode: "internal_error",
+      message: "The agent returned an invalid completion response.",
+      status: "failed",
+      stepsUsed: 2,
+    });
+    expect(generateTextMock).toHaveBeenCalledTimes(2);
   });
 });

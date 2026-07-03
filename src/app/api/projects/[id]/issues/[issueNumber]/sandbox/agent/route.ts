@@ -85,12 +85,7 @@ function buildAgentSummary(result: Awaited<ReturnType<typeof runSandboxAgent>>) 
     case "blocked":
       return {
         body: `${result.message}${clarification}`,
-        tone: "warning" as const,
-      };
-    case "max_steps_reached":
-      return {
-        body: `${result.message}\n\n${filesTouched}`,
-        tone: "warning" as const,
+        tone: result.failureCode ? ("error" as const) : ("warning" as const),
       };
     default:
       return {

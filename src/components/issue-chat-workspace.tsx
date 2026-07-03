@@ -21,7 +21,7 @@ type AgentResponse =
       clarificationQuestion?: string;
       message: string;
       messages?: AIChatMessage[];
-      status: "blocked" | "completed" | "max_steps_reached";
+      status: "blocked" | "completed";
     }
   | {
       message?: string;
@@ -74,7 +74,9 @@ export function IssueChatWorkspace({
     }
   }
 
-  function buildFallbackAgentMessage(result: Extract<AgentResponse, { status: "blocked" | "completed" | "max_steps_reached" }>): AIChatMessage {
+  function buildFallbackAgentMessage(
+    result: Extract<AgentResponse, { status: "blocked" | "completed" }>,
+  ): AIChatMessage {
     return {
       body: result.clarificationQuestion
         ? `${result.message}\n\nClarification needed: ${result.clarificationQuestion}`

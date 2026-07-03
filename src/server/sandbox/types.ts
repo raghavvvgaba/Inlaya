@@ -130,8 +130,7 @@ export type SandboxCommandResult = {
 export type SandboxAgentStatus =
   | "completed"
   | "blocked"
-  | "failed"
-  | "max_steps_reached";
+  | "failed";
 
 export type SandboxAgentInput = {
   issueNumber: number;
