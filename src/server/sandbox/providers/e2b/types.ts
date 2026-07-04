@@ -10,6 +10,8 @@ import type {
   SandboxWriteFileInput,
   StartSandboxSessionInput,
   StartupStage,
+  SandboxSubmitStage,
+  SandboxSubmitState,
 } from "~/server/sandbox/types";
 
 export type SandboxCtor = typeof import("e2b").Sandbox;
@@ -54,6 +56,9 @@ export type E2BSandboxSession = {
   previewObservedVersion?: string;
   startupStage?: StartupStage;
   startupMessage?: string;
+  submitState?: SandboxSubmitState;
+  submitStage?: SandboxSubmitStage;
+  submitMessage?: string;
   previewCommand?: string;
   previewCwd?: string;
   repoKind?: SupportedRepoKind;

@@ -1267,23 +1267,66 @@ describe("runSandboxAgent", () => {
     });
   });
 
-  it("fails immediately for an unknown tool request", async () => {
-    generateTextMock.mockResolvedValueOnce(
-      createModelResponse({
-        text: "I'll call a tool that does not exist.",
-        toolCalls: [createToolCall("unknown_tool", {}, "call-unknown")],
-      }),
-    );
+  it("feeds an unknown tool request back to the model and lets it retry", async () => {
+    generateTextMock
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "I'll call a tool that does not exist.",
+          toolCalls: [createToolCall("unknown_tool", {}, "call-unknown")],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "I'll use an available tool instead.",
+          toolCalls: [
+            createToolCall("list_directory", { path: "." }, "call-list"),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "Done inspecting.",
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: JSON.stringify({
+            message: "I recovered by using an available tool.",
+            status: "completed",
+          }),
+        }),
+      );
+
+    listToolExecuteMock.mockResolvedValueOnce([
+      {
+        name: "src",
+        path: "src",
+        type: "dir",
+      },
+    ]);
 
     const result = await runSandboxAgent(baseInput);
+    const finalMessages = getFinalModelMessages();
+    const toolMessages = getToolMessages(finalMessages);
 
     expect(result).toMatchObject({
-      failureCode: "internal_error",
-      message: "The agent could not continue because a sandbox tool was missing.",
-      status: "failed",
-      stepsUsed: 1,
+      message: "Done inspecting.",
+      status: "completed",
+      stepsUsed: 4,
     });
-    expect(generateTextMock).toHaveBeenCalledTimes(1);
+    expect(generateTextMock).toHaveBeenCalledTimes(4);
+    expect(listToolExecuteMock).toHaveBeenCalledTimes(1);
+    expect(toolMessages).toHaveLength(2);
+    expect(parseToolMessage(toolMessages[0]!)).toMatchObject({
+      arguments: {},
+      code: "unknown_tool",
+      ok: false,
+      retryable: true,
+      tool: "unknown_tool",
+    });
+    expect(parseToolMessage(toolMessages[0]!).message).toContain(
+      "Use one of the available tools instead",
+    );
   });
 
   it("fails when the finish response is not valid JSON", async () => {

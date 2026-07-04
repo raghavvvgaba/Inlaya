@@ -3,6 +3,16 @@ import type { AIUsage } from "~/server/ai/types";
 export type SandboxStatus = "starting" | "installing" | "running" | "stopped" | "error";
 export type PreviewState = "ready" | "recovering" | "stale" | "offline";
 export type StartupStage = "creating" | "scaffolding" | "installing" | "seeding" | "starting-preview" | "ready" | "error";
+export type SandboxSubmitState = "idle" | "running" | "completed" | "failed";
+export type SandboxSubmitStage =
+  | "checking-changes"
+  | "preparing-branch"
+  | "staging"
+  | "committing"
+  | "pushing"
+  | "creating-pr"
+  | "done"
+  | "error";
 
 export type SandboxSession = {
   sessionId: string;
@@ -20,6 +30,9 @@ export type SandboxSession = {
   previewObservedVersion?: string;
   startupStage?: StartupStage;
   startupMessage?: string;
+  submitState?: SandboxSubmitState;
+  submitStage?: SandboxSubmitStage;
+  submitMessage?: string;
 };
 
 export type StopSandboxSessionInput = {
@@ -127,6 +140,34 @@ export type SandboxCommandResult = {
   stdout: string;
 };
 
+export type SandboxSubmitChangesInput = {
+  branchName: string;
+  commitMessage: string;
+  installationToken: string;
+  repoName: string;
+  repoOwner: string;
+  sessionId: string;
+};
+
+export type SandboxSubmitChangesResult =
+  | {
+      branchName: string;
+      commitHash: string;
+      status: "committed";
+    }
+  | {
+      branchName: string;
+      message: string;
+      status: "noop";
+    };
+
+export type SandboxSubmitProgressInput = {
+  message?: string;
+  sessionId: string;
+  stage?: SandboxSubmitStage;
+  state: SandboxSubmitState;
+};
+
 export type SandboxAgentStatus =
   | "completed"
   | "blocked"
@@ -159,6 +200,8 @@ export type SandboxProvider = {
   restartPreview: (sessionId: string) => Promise<SandboxSession>;
   runCommand: (input: SandboxCommandInput) => Promise<SandboxCommandResult>;
   runRawCommand: (input: SandboxCommandInput) => Promise<SandboxCommandResult>;
+  setSubmitProgress: (input: SandboxSubmitProgressInput) => Promise<SandboxSession>;
+  submitChanges: (input: SandboxSubmitChangesInput) => Promise<SandboxSubmitChangesResult>;
   listRawFiles: (input: SandboxRawListFilesInput) => Promise<SandboxFileEntry[]>;
   readRawFile: (input: SandboxRawFileInput) => Promise<SandboxRawFile>;
   start: (input: StartSandboxSessionInput) => Promise<SandboxSession>;

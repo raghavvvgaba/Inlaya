@@ -43,6 +43,7 @@ export default async function ProjectIssuePage({
   } = issueWorkspaceData;
   const sandboxBaseAction = `/api/projects/${project.id}/issues/${issueNumber}/sandbox`;
   const agentAction = `${sandboxBaseAction}/agent`;
+  const submitAction = `${sandboxBaseAction}/submit`;
 
   return (
     <AppShell compactHeader contentWidth="full" description="" title="Issue">
@@ -107,6 +108,8 @@ export default async function ProjectIssuePage({
         initialMessages={messages}
         issueNumber={issueNumber}
         projectId={project.id}
+        sessionAction={`${sandboxBaseAction}/session`}
+        submitAction={submitAction}
       />
       </section>
     </AppShell>

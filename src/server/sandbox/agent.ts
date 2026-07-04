@@ -92,7 +92,7 @@ type AgentToolFailure = {
   message: string;
   recentEvent: string;
   status: "tool_failure";
-  tool: SandboxAgentToolName;
+  tool: string;
   toolMessageContent: string;
 };
 
@@ -175,7 +175,7 @@ type ToolFailureMessageInput = {
   code: string;
   message: string;
   retryable: boolean;
-  tool: SandboxAgentToolName;
+  tool: string;
 };
 
 function previewText(value: string, maxLength = 220) {
@@ -359,7 +359,7 @@ function isSandboxAgentToolName(value: string): value is SandboxAgentToolName {
   return sandboxAgentToolIds.includes(value as SandboxAgentToolName);
 }
 
-function formatToolFeedback(tool: SandboxAgentToolName, message: string) {
+function formatToolFeedback(tool: string, message: string) {
   return [
     `The previous ${tool} call failed.`,
     `Error: ${message}`,
@@ -368,7 +368,7 @@ function formatToolFeedback(tool: SandboxAgentToolName, message: string) {
 }
 
 function buildFailureSignature(
-  tool: SandboxAgentToolName,
+  tool: string,
   code: string,
   argumentsValue: Record<string, unknown>,
 ) {
@@ -388,7 +388,7 @@ function parseToolCallArguments(toolCall: AIToolCall): Record<string, unknown> {
 }
 
 function buildRetryExhaustedResult(
-  tool: SandboxAgentToolName,
+  tool: string,
   argumentsValue: Record<string, unknown>,
 ): AgentRetryExhaustedResult {
   return {
@@ -405,6 +405,34 @@ function buildRetryExhaustedResult(
       message: "The agent could not recover from a repeated tool error.",
       retryable: false,
       tool,
+    }),
+  };
+}
+
+function buildUnknownToolFailureResult(
+  toolName: string,
+  argumentsValue: Record<string, unknown>,
+): AgentToolFailure {
+  const availableTools = sandboxAgentToolIds.join(", ");
+  const message = `The "${toolName}" tool does not exist. Use one of the available tools instead: ${availableTools}.`;
+
+  return {
+    code: "unknown_tool",
+    latestObservation: [
+      `The previous ${toolName} call failed.`,
+      `Error: ${message}`,
+      "Choose one of the available tools and continue if possible.",
+    ].join("\n"),
+    message,
+    recentEvent: `Unknown tool requested: ${toolName}.`,
+    status: "tool_failure",
+    tool: toolName,
+    toolMessageContent: buildToolFailureMessageContent({
+      argumentsValue,
+      code: "unknown_tool",
+      message,
+      retryable: true,
+      tool: toolName,
     }),
   };
 }
@@ -583,12 +611,10 @@ async function executeToolCall(
   sessionId: string,
 ): Promise<AgentToolExecutionResult> {
   if (!isSandboxAgentToolName(toolCall.function.name)) {
-    return {
-      code: "internal_error",
-      message: "The agent could not continue because a sandbox tool was missing.",
-      recentEvent: `A tool was requested but not found: ${toolCall.function.name}`,
-      status: "internal_fatal_failure",
-    };
+    return buildUnknownToolFailureResult(
+      toolCall.function.name,
+      parseToolCallArguments(toolCall),
+    );
   }
 
   const toolName = toolCall.function.name;

@@ -9,6 +9,10 @@ import {
   restoreSandboxSession,
 } from "~/server/sandbox/providers/e2b/lifecycle";
 import {
+  setSandboxSubmitProgress,
+  submitSandboxChanges,
+} from "~/server/sandbox/providers/e2b/submit";
+import {
   SandboxExpiredError,
   type SandboxListItem,
 } from "~/server/sandbox/providers/e2b/session-state";
@@ -22,6 +26,8 @@ export const e2bSandboxProvider: SandboxProvider = {
   ...lifecycleProviderMethods,
   runCommand: runSandboxCommand,
   runRawCommand: runRawSandboxCommand,
+  setSubmitProgress: setSandboxSubmitProgress,
+  submitChanges: submitSandboxChanges,
   listRawFiles: listRawSandboxFiles,
   readRawFile: readRawSandboxFile,
   writeRawFile: writeRawSandboxFile,

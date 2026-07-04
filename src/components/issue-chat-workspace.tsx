@@ -1,9 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { ExternalLink, GitPullRequest, LoaderCircle } from "lucide-react";
+import { toast } from "sonner";
 
 import { AIChat, type AIChatMessage } from "~/components/ui/ai-chat";
+import { Button } from "~/components/ui/button";
 import { ChatInputBox } from "~/components/ui/chat-input-box";
 import { buildIssueChatRuntimeMessage } from "~/lib/issue-chat-messages";
 
@@ -14,6 +17,8 @@ type IssueChatWorkspaceProps = {
   initialMessages: AIChatMessage[];
   issueNumber: number;
   projectId: string;
+  sessionAction: string;
+  submitAction: string;
 };
 
 type AgentResponse =
@@ -28,6 +33,34 @@ type AgentResponse =
       status: "failed";
     };
 
+type SubmitResponse =
+  | {
+      branchName?: string;
+      message: string;
+      messages?: AIChatMessage[];
+      pullRequestNumber?: number;
+      pullRequestUrl?: string;
+      status: "completed" | "noop" | "reused";
+    }
+  | {
+      message: string;
+      status: "failed";
+    };
+
+type SandboxSessionResponse =
+  | {
+      ok: true;
+      session: {
+        submitMessage?: string;
+        submitStage?: string;
+        submitState?: string;
+      };
+    }
+  | {
+      error: string;
+      ok: false;
+    };
+
 export function IssueChatWorkspace({
   accessBlocked,
   agentAction,
@@ -35,11 +68,17 @@ export function IssueChatWorkspace({
   initialMessages,
   issueNumber,
   projectId,
+  sessionAction,
+  submitAction,
 }: IssueChatWorkspaceProps) {
   const router = useRouter();
   const [messages, setMessages] = useState(initialMessages);
   const [instruction, setInstruction] = useState(initialInstruction);
   const [isRunning, setIsRunning] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(null);
+  const [submitMessage, setSubmitMessage] = useState<string | null>(null);
+  const [submitSessionId, setSubmitSessionId] = useState<string | null>(null);
 
   const thinkingMessage = useMemo<AIChatMessage>(
     () => ({
@@ -90,6 +129,37 @@ export function IssueChatWorkspace({
     };
   }
 
+  async function refreshSubmitProgress(sessionId: string) {
+    const url = new URL(sessionAction, window.location.origin);
+    url.searchParams.set("sessionId", sessionId);
+    const response = await fetch(url, {
+      headers: {
+        Accept: "application/json",
+      },
+    });
+    const result = (await response.json()) as SandboxSessionResponse;
+
+    if (response.ok && result.ok) {
+      setSubmitMessage(result.session.submitMessage ?? null);
+    }
+  }
+
+  useEffect(() => {
+    if (!isSubmitting || !submitSessionId) {
+      return;
+    }
+
+    void refreshSubmitProgress(submitSessionId);
+
+    const interval = window.setInterval(() => {
+      void refreshSubmitProgress(submitSessionId);
+    }, 1000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [isSubmitting, submitSessionId]);
+
   async function handleRunAgent() {
     const trimmedInstruction = instruction.trim();
     const sessionId = getSandboxSessionId();
@@ -99,15 +169,12 @@ export function IssueChatWorkspace({
     }
 
     if (!sessionId) {
-      setMessages((current) => [
-        ...current,
-        buildIssueChatRuntimeMessage("missing_session_id"),
-      ]);
+      toast.error("Start the sandbox first so Devin has a live workspace to edit.");
       return;
     }
 
     const userMessage: AIChatMessage = {
-      body: `${trimmedInstruction}\n\nIssue #${issueNumber}`,
+      body: trimmedInstruction,
       id: `user-message-${Date.now()}`,
       role: "user",
     };
@@ -165,12 +232,123 @@ export function IssueChatWorkspace({
     }
   }
 
+  async function handleSubmitChanges() {
+    const sessionId = getSandboxSessionId();
+
+    if (accessBlocked || isRunning || isSubmitting) {
+      return;
+    }
+
+    if (!sessionId) {
+      toast.error("Start the sandbox first so Devin has a live workspace to edit.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setPullRequestUrl(null);
+    setSubmitMessage("Preparing submit");
+    setSubmitSessionId(sessionId);
+
+    try {
+      const response = await fetch(submitAction, {
+        body: JSON.stringify({ sessionId }),
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      });
+      const result = (await response.json()) as SubmitResponse;
+
+      if (!response.ok || result.status === "failed") {
+        setMessages((current) => [
+          ...current,
+          buildIssueChatRuntimeMessage("submit_failed", {
+            fallbackBody: result.message,
+          }),
+        ]);
+        toast.error(result.message);
+        return;
+      }
+
+      if (result.messages?.length) {
+        setMessages((current) => [...current, ...result.messages!]);
+      }
+
+      setSubmitMessage(result.message);
+
+      if (result.pullRequestUrl) {
+        setPullRequestUrl(result.pullRequestUrl);
+      }
+
+      if (result.status === "noop") {
+        toast.warning(result.message);
+      } else {
+        toast.success(result.message);
+      }
+
+      router.refresh();
+    } catch {
+      const fallbackMessage = "The pull request could not be created.";
+      setMessages((current) => [
+        ...current,
+        buildIssueChatRuntimeMessage("submit_failed", {
+          fallbackBody: fallbackMessage,
+        }),
+      ]);
+      toast.error(fallbackMessage);
+    } finally {
+      setIsSubmitting(false);
+      setSubmitSessionId(null);
+    }
+  }
+
   return (
     <AIChat
       className="h-auto min-h-[32rem]"
       fullBleed
       messages={messages}
     >
+      <div className="mb-3 rounded-[1.5rem] border border-white/10 bg-white/[0.03] px-3 py-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45">
+              <GitPullRequest className="h-3.5 w-3.5" />
+              Submit Changes
+            </div>
+            <p className="mt-1 truncate text-xs text-white/55">
+              {submitMessage ?? "Commit, push, and create a pull request."}
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {pullRequestUrl ? (
+              <Button
+                asChild
+                className="h-8 rounded-full border-white/10 bg-transparent px-3 text-[11px] text-white/75 hover:bg-white/10 hover:text-white"
+                variant="outline"
+              >
+                <a href={pullRequestUrl} rel="noreferrer" target="_blank">
+                  <ExternalLink className="h-4 w-4" />
+                  Open PR
+                </a>
+              </Button>
+            ) : null}
+            <Button
+              className="h-8 rounded-full bg-cyan-500 px-3 text-[11px] font-medium text-black hover:bg-cyan-400"
+              disabled={accessBlocked || isRunning || isSubmitting}
+              onClick={handleSubmitChanges}
+              type="button"
+            >
+              {isSubmitting ? (
+                <LoaderCircle className="h-4 w-4 animate-spin" />
+              ) : (
+                <GitPullRequest className="h-4 w-4" />
+              )}
+              {isSubmitting ? "Submitting" : "Submit"}
+            </Button>
+          </div>
+        </div>
+      </div>
       <ChatInputBox
         accessBlocked={accessBlocked}
         instruction={instruction}

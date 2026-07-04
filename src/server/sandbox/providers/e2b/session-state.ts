@@ -8,6 +8,8 @@ import type { E2BSandboxSession } from "~/server/sandbox/providers/e2b/types";
 import type {
   PreviewState,
   SandboxSession as PublicSandboxSession,
+  SandboxSubmitStage,
+  SandboxSubmitState,
   StartupStage,
 } from "~/server/sandbox/types";
 
@@ -91,6 +93,9 @@ export function publicSession(session: E2BSandboxSession): PublicSandboxSession 
     previewObservedVersion: session.previewObservedVersion,
     startupStage: session.startupStage,
     startupMessage: session.startupMessage,
+    submitState: session.submitState,
+    submitStage: session.submitStage,
+    submitMessage: session.submitMessage,
   };
 }
 
@@ -170,6 +175,19 @@ export function setStartupStage(
 ) {
   session.startupStage = stage;
   session.startupMessage = message;
+}
+
+export function setSubmitProgress(
+  session: E2BSandboxSession,
+  input: {
+    message?: string;
+    stage?: SandboxSubmitStage;
+    state: SandboxSubmitState;
+  },
+) {
+  session.submitState = input.state;
+  session.submitStage = input.stage;
+  session.submitMessage = input.message;
 }
 
 export function assertSessionActive(session: E2BSandboxSession) {

@@ -28,6 +28,7 @@ type IssueChatErrorCode =
   | "missing_session_id"
   | "sandbox_not_running"
   | "session_not_found"
+  | "submit_failed"
   | "unsupported_file";
 
 const issueChatSuccessMessages: Record<IssueChatSuccessCode, IssueChatMessageEntry> =
@@ -109,6 +110,10 @@ const issueChatErrorMessages: Record<IssueChatErrorCode, IssueChatMessageEntry> 
   },
   session_not_found: {
     body: "This sandbox session is no longer available. Start a fresh sandbox and prepare the edit again.",
+    tone: "error",
+  },
+  submit_failed: {
+    body: "The pull request could not be created. The sandbox is still intact, and you can retry after checking the message above.",
     tone: "error",
   },
   unsupported_file: {
