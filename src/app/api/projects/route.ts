@@ -10,7 +10,7 @@ import { fetchImportRepositories } from "~/server/github/repos";
 import { listProjectsForUser } from "~/server/projects";
 
 function toErrorRedirect(url: URL, error: string) {
-  const redirectUrl = new URL("/projects/new", url);
+  const redirectUrl = new URL("/dashboard?newImport=true", url);
   redirectUrl.searchParams.set("error", error);
   return NextResponse.redirect(redirectUrl, { status: 303 });
 }
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
   const { userId, redirectToSignIn } = await auth();
 
   if (!userId) {
-    return redirectToSignIn({ returnBackUrl: "/projects/new" });
+    return redirectToSignIn({ returnBackUrl: "/dashboard?newImport=true" });
   }
 
   const githubStatus = await getGithubConnectionStatus(userId);

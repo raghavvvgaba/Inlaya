@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 
 import { AppShell } from "~/components/app-shell";
-import { IssueSandboxStatusPanel } from "~/components/issue-sandbox-status-panel";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -54,17 +53,17 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
             <Button
               asChild
               variant="outline"
-              className="h-10 rounded-none border-border px-4 text-[10px] font-bold uppercase tracking-widest"
+              className="h-9 rounded-md border-border px-3 text-xs font-medium"
             >
               <Link href="/dashboard">
-                <ChevronLeft className="mr-2 h-3.5 w-3.5" />
+                <ChevronLeft className="mr-1.5 h-4 w-4" />
                 Return to Dashboard
               </Link>
             </Button>
             <Button
               asChild
               variant="outline"
-              className="h-10 w-10 rounded-none border-border p-0"
+              className="h-9 w-9 rounded-md border-border p-0"
             >
               <a
                 href={`https://github.com/${project.repoOwner}/${project.repoName}`}
@@ -78,21 +77,21 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
           </div>
 
           <div className="space-y-2">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <Github className="h-5 w-5 text-muted-foreground" />
-              <h1 className="text-2xl font-bold uppercase tracking-tight">
+              <h1 className="text-xl font-semibold tracking-tight">
                 {project.repoOwner}/{project.repoName}
               </h1>
             </div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-              Indexed On {formatProjectDate(project.createdAt)}
+            <p className="text-xs text-muted-foreground">
+              Indexed on {formatProjectDate(project.createdAt)}
             </p>
           </div>
         </section>
         <section className="space-y-6">
       <div className="flex items-center justify-between border-b border-border pb-5">
         <div>
-          <h2 className="text-lg font-bold uppercase tracking-tight">
+          <h2 className="text-base font-semibold tracking-tight">
             Repository Issues
           </h2>
         </div>
@@ -104,16 +103,16 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
           className="rounded-none border-amber-500/20 bg-amber-500/10 text-amber-500"
         >
           <ShieldAlert className="h-4 w-4 text-amber-500" />
-          <AlertTitle className="text-[10px] font-bold uppercase tracking-widest">
+          <AlertTitle className="text-sm font-semibold">
             Access Required
           </AlertTitle>
-          <AlertDescription className="mt-4 space-y-4">
-            <p className="text-xs font-medium uppercase leading-relaxed">
+          <AlertDescription className="mt-3 space-y-3">
+            <p className="text-sm leading-relaxed">
               GitHub App installation missing or revoked for this repository.
             </p>
             <Button
               asChild
-              className="bg-amber-500 text-amber-950 font-bold uppercase text-[10px] tracking-widest h-10 rounded-none hover:bg-amber-400"
+              className="bg-amber-500 text-amber-950 font-medium text-xs h-9 rounded-md hover:bg-amber-400"
             >
               <a href={env.GITHUB_APP_INSTALL_URL} rel="noreferrer" target="_blank">
                 Grant Resource Access
@@ -129,10 +128,10 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
           className="rounded-none border-destructive/20 bg-destructive/10"
         >
           <ShieldAlert className="h-4 w-4 text-destructive" />
-          <AlertTitle className="text-[10px] font-bold uppercase tracking-widest text-destructive">
+          <AlertTitle className="text-sm font-semibold text-destructive">
             API Sync Failure
           </AlertTitle>
-          <AlertDescription className="mt-2 text-xs font-medium uppercase leading-relaxed text-destructive">
+          <AlertDescription className="mt-2 text-sm leading-relaxed text-destructive">
             GitHub API responded with an error. Metadata is preserved, but the issue feed
             is unavailable.
           </AlertDescription>
@@ -142,23 +141,15 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
       {issuesResult.status === "ok" && issuesResult.issues.length === 0 ? (
         <div className="flex flex-col items-center justify-center border border-dashed border-border bg-muted/10 py-16 text-center">
           <Terminal className="mb-4 h-8 w-8 text-muted-foreground/30" />
-          <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-            Clean Exit: 0 Issues
+          <p className="text-sm font-medium text-muted-foreground">
+            No open issues detected
           </p>
-          <p className="mt-2 max-w-[240px] text-[10px] uppercase text-muted-foreground">
-            No open issues were detected for this repository in the current session.
+          <p className="mt-1 text-xs text-muted-foreground">
+            No open issues were detected for this repository.
           </p>
         </div>
       ) : null}
 
-      <IssueSandboxStatusPanel
-        heartbeatAction={`${sandboxBaseAction}/heartbeat`}
-        projectId={project.id}
-        restartPreviewAction={`${sandboxBaseAction}/restart-preview`}
-        sessionAction={`${sandboxBaseAction}/session`}
-        startAction={`${sandboxBaseAction}/start`}
-        stopAction={`${sandboxBaseAction}/stop`}
-      />
 
       {issuesResult.status === "ok" && issuesResult.issues.length > 0 ? (
         <div className="grid gap-px border border-border bg-border">
@@ -172,26 +163,26 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
                 href={`/projects/${project.id}/issues/${issue.number}`}
               >
                 <div className="flex flex-wrap items-center gap-3">
-                  <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/10 rounded-none text-[10px] font-bold uppercase tracking-widest">
-                    OPEN
+                  <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 hover:bg-emerald-500/10 rounded-md text-xs font-medium">
+                    Open
                   </Badge>
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold uppercase tracking-tight transition-colors group-hover:text-primary group-hover/issue:text-primary">
+                  <h4 className="text-base font-semibold transition-colors group-hover:text-primary group-hover/issue:text-primary">
                     {issue.title}
                   </h4>
                   <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 transition-colors group-hover/issue:text-muted-foreground/90">
-                    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground transition-colors group-hover/issue:text-muted-foreground/90">
-                      <Activity className="h-3 w-3" />
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors group-hover/issue:text-muted-foreground/90">
+                      <Activity className="h-3.5 w-3.5" />
                       {issue.author}
                     </div>
-                    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground transition-colors group-hover/issue:text-muted-foreground/90">
-                      <MessageSquare className="h-3 w-3" />
-                      {issue.comments} REPLIES
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors group-hover/issue:text-muted-foreground/90">
+                      <MessageSquare className="h-3.5 w-3.5" />
+                      {issue.comments} replies
                     </div>
-                    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground transition-colors group-hover/issue:text-muted-foreground/90">
-                      <Clock className="h-3 w-3" />
-                      UPDATED {new Date(issue.updatedAt).toLocaleDateString().toUpperCase()}
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors group-hover/issue:text-muted-foreground/90">
+                      <Clock className="h-3.5 w-3.5" />
+                      Updated {new Date(issue.updatedAt).toLocaleDateString()}
                     </div>
                   </div>
                 </div>
@@ -200,7 +191,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
               <div className="flex flex-wrap items-center gap-3">
                 <Button
                   asChild
-                  className="h-10 rounded-none px-4 text-[10px] font-bold uppercase tracking-widest transition-transform group-hover/issue:-translate-y-px"
+                  className="h-9 rounded-md px-4 text-xs font-medium transition-transform group-hover/issue:-translate-y-px"
                 >
                   <Link href={`/projects/${project.id}/issues/${issue.number}`}>
                     Open Issue Workspace
@@ -209,7 +200,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
                 <Button
                   asChild
                   variant="outline"
-                  className="rounded-none font-bold uppercase text-[10px] tracking-widest h-10 px-4"
+                  className="rounded-md font-medium text-xs h-9 px-4"
                 >
                   <a href={issue.url} rel="noreferrer" target="_blank">
                     GitHub

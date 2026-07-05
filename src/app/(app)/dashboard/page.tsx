@@ -9,12 +9,21 @@ import {
 import { AppShell } from "~/components/app-shell";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { NewImportModal } from "~/components/new-import-modal";
+import { env } from "~/env";
 import { getAuth } from "~/server/auth/session";
 import { getDashboardPageData } from "~/server/projects";
 
-export default async function DashboardPage() {
+type DashboardPageProps = {
+  searchParams: Promise<{ owner?: string, newImport?: string, success?: string, error?: string }>;
+};
+
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const { userId } = await getAuth();
+  const params = await searchParams;
   const { githubStatus, projects } = await getDashboardPageData(userId!);
+  
+  const defaultOpen = !!params.newImport || !!params.success || !!params.error;
 
   const projectCount = projects.length;
 
@@ -69,16 +78,20 @@ export default async function DashboardPage() {
               </Badge>
             </div>
           </div>
-          <Button
-            asChild
-            variant="outline"
-            className="h-10 rounded-none border-border px-4 text-[10px] font-bold uppercase tracking-widest"
-          >
-            <Link href="/projects/new">
-              <Plus className="mr-2 h-3.5 w-3.5" />
-              New Import
-            </Link>
-          </Button>
+          <NewImportModal
+            defaultOpen={defaultOpen}
+            githubAppInstallUrl={env.GITHUB_APP_INSTALL_URL}
+            owner={params.owner}
+            trigger={
+              <Button
+                variant="outline"
+                className="h-10 rounded-none border-border px-4 text-[10px] font-bold uppercase tracking-widest"
+              >
+                <Plus className="mr-2 h-3.5 w-3.5" />
+                New Import
+              </Button>
+            }
+          />
         </div>
 
         <div className="grid gap-4">
@@ -96,21 +109,31 @@ export default async function DashboardPage() {
                   : "Connect GitHub and initialize your first project import."}
               </p>
               <div className="mt-6">
-                <Button
-                  asChild
-                  variant={githubStatus.connected ? "default" : "outline"}
-                  className="h-10 rounded-none px-6 text-[10px] font-bold uppercase tracking-widest"
-                >
-                  <Link
-                    href={
-                      githubStatus.connected
-                        ? "/projects/new"
-                        : "/onboarding/github"
+                {githubStatus.connected ? (
+                  <NewImportModal
+                    defaultOpen={defaultOpen}
+                    githubAppInstallUrl={env.GITHUB_APP_INSTALL_URL}
+                    owner={params.owner}
+                    trigger={
+                      <Button
+                        variant="default"
+                        className="h-10 rounded-none px-6 text-[10px] font-bold uppercase tracking-widest"
+                      >
+                        Start Import
+                      </Button>
                     }
+                  />
+                ) : (
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="h-10 rounded-none px-6 text-[10px] font-bold uppercase tracking-widest"
                   >
-                    {githubStatus.connected ? "Start Import" : "Connect GitHub"}
-                  </Link>
-                </Button>
+                    <Link href="/onboarding/github">
+                      Connect GitHub
+                    </Link>
+                  </Button>
+                )}
               </div>
             </div>
           ) : (

@@ -8,14 +8,19 @@ import { Button } from "~/components/ui/button";
 type ImportLoadButtonProps = {
   href: string;
   hasSession: boolean;
+  onRefresh?: () => void;
 };
 
-export function ImportLoadButton({ href, hasSession }: ImportLoadButtonProps) {
+export function ImportLoadButton({ href, hasSession, onRefresh }: ImportLoadButtonProps) {
   const [loading, setLoading] = useState(false);
 
   function handleClick() {
-    setLoading(true);
-    window.location.href = href;
+    if (hasSession && onRefresh) {
+      onRefresh();
+    } else {
+      setLoading(true);
+      window.location.href = href;
+    }
   }
 
   return (

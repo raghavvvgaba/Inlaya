@@ -118,7 +118,7 @@ export default async function GithubOnboardingPage({
                       </a>
                     </Button>
                     <Button asChild variant="outline" className="border-border font-bold uppercase text-[10px] tracking-widest h-12 rounded-none px-8">
-                      <Link href="/projects/new">
+                      <Link href="/dashboard?newImport=true">
                         Project Import
                         <ArrowRight className="ml-2 h-3.5 w-3.5" />
                       </Link>

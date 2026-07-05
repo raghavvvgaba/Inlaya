@@ -7,7 +7,7 @@ export async function GET() {
   const { userId, redirectToSignIn } = await auth();
 
   if (!userId) {
-    return redirectToSignIn({ returnBackUrl: "/projects/new" });
+    return redirectToSignIn({ returnBackUrl: "/dashboard?newImport=true" });
   }
 
   const authorizeUrl = await beginGithubOauth("import-session");

@@ -139,10 +139,10 @@ export function RepositorySearchBar({
 
           return (
             <div
-              className="flex flex-col gap-6 bg-card p-6 md:flex-row md:items-center md:justify-between group transition hover:bg-muted/50"
+              className="flex flex-col gap-4 bg-card p-4 md:flex-row md:items-center md:justify-between group transition hover:bg-muted/50"
               key={repo.id}
             >
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="flex h-8 w-8 items-center justify-center bg-muted border border-border group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                     <Github className="h-4 w-4" />

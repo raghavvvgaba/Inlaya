@@ -61,11 +61,6 @@ const newProjectSuccessMessages: Record<string, string> = {
     "Repository access refreshed. You can import any repo marked Ready.",
 };
 
-type NewProjectPageSearchParams = {
-  error?: string;
-  owner?: string;
-  success?: string;
-};
 
 type GithubOnboardingPageSearchParams = {
   error?: string;
@@ -140,85 +135,6 @@ export async function getGithubOnboardingPageData(
   };
 }
 
-export async function getNewProjectPageData(
-  userId: string,
-  params: NewProjectPageSearchParams,
-) {
-  const githubStatus = await getGithubConnectionStatus(userId);
-
-  if (!githubStatus.connected) {
-    redirect("/onboarding/github?error=github_required");
-  }
-
-  const importSession = await readGithubImportSession();
-  const importedProjects = await listImportedProjectsForUser(userId);
-  const importedProjectsRecord = Object.fromEntries(
-    importedProjects.map((project) => [
-      `${project.repoOwner.toLowerCase()}/${project.repoName.toLowerCase()}`,
-      project.id,
-    ]),
-  );
-
-  let repoList: Awaited<ReturnType<typeof fetchImportRepositories>> | null = null;
-  let viewerLogin: string | null = null;
-  let sessionError: string | null = null;
-
-  if (importSession) {
-    try {
-      [repoList, viewerLogin] = await Promise.all([
-        fetchImportRepositories(importSession.accessToken),
-        fetchGithubViewerLogin(importSession.accessToken),
-      ]);
-    } catch {
-      sessionError =
-        newProjectErrorMessages.github_repo_fetch_failed ??
-        "GitHub did not return the repository list. Refresh access and try again.";
-    }
-  }
-
-  const errorMessage =
-    sessionError ??
-    (params.error ? (newProjectErrorMessages[params.error] ?? null) : null) ??
-    null;
-  const successMessage = params.success
-    ? (newProjectSuccessMessages[params.success] ?? null)
-    : null;
-  const ownerOptions = repoList
-    ? Array.from(new Set(repoList.map((repo) => repo.owner))).sort((a, b) => {
-        if (viewerLogin && a.toLowerCase() === viewerLogin.toLowerCase()) {
-          return -1;
-        }
-
-        if (viewerLogin && b.toLowerCase() === viewerLogin.toLowerCase()) {
-          return 1;
-        }
-
-        return a.localeCompare(b);
-      })
-    : [];
-  const selectedOwner =
-    ownerOptions.find(
-      (owner) => params.owner?.toLowerCase() === owner.toLowerCase(),
-    ) ??
-    ownerOptions.find(
-      (owner) => viewerLogin?.toLowerCase() === owner.toLowerCase(),
-    ) ??
-    ownerOptions[0] ??
-    "";
-  const filteredRepos =
-    repoList?.filter((repo) => repo.owner === selectedOwner) ?? [];
-
-  return {
-    errorMessage,
-    filteredRepos,
-    importSession,
-    importedProjectsRecord,
-    ownerOptions,
-    repoList,
-    selectedOwner,
-    successMessage,
-  };
-}
 
 export async function getProjectPageData(userId: string, projectId: string) {
   const project = await getOwnedProject(projectId, userId);
