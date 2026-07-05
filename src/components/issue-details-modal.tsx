@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText } from "lucide-react";
+import { ExternalLink, FileText, X } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import {
@@ -10,6 +10,7 @@ import {
   SheetHeader,
   SheetTitle,
   SheetTrigger,
+  SheetClose,
 } from "~/components/ui/sheet";
 
 type IssueDetailsModalProps = {
@@ -18,6 +19,7 @@ type IssueDetailsModalProps = {
   comments?: number;
   createdAt?: string;
   issueNumber: number;
+  githubUrl?: string;
   state?: string;
   title: string;
   updatedAt?: string;
@@ -39,6 +41,7 @@ export function IssueDetailsModal({
   body,
   comments,
   createdAt,
+  githubUrl,
   issueNumber,
   state,
   title,
@@ -61,15 +64,45 @@ export function IssueDetailsModal({
       </SheetTrigger>
       <SheetContent
         side="right"
+        showCloseButton={false}
         className="!inset-y-auto !right-auto !left-1/2 !top-1/2 !h-auto !w-[min(46rem,calc(100vw-2rem))] !max-w-none !-translate-x-1/2 !-translate-y-1/2 rounded-none border border-border bg-background p-0"
       >
         <SheetHeader className="border-b border-border px-6 py-5">
-          <SheetDescription className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-            Issue #{issueNumber}
-          </SheetDescription>
-          <SheetTitle className="pr-10 text-xl font-bold uppercase tracking-tight">
-            {title}
-          </SheetTitle>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-col gap-1.5">
+              <SheetDescription className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                Issue #{issueNumber}
+              </SheetDescription>
+              <SheetTitle className="text-xl font-bold uppercase tracking-tight">
+                {title}
+              </SheetTitle>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {githubUrl ? (
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="h-8 shrink-0 rounded-none border-border px-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground"
+                >
+                  <a href={githubUrl} target="_blank" rel="noreferrer">
+                    <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                    GitHub
+                  </a>
+                </Button>
+              ) : null}
+              <SheetClose asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 w-8 shrink-0 rounded-none border-border p-0 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                  <span className="sr-only">Close</span>
+                </Button>
+              </SheetClose>
+            </div>
+          </div>
         </SheetHeader>
 
         <div className="space-y-6 px-6 py-6">

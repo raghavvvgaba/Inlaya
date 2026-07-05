@@ -45,7 +45,7 @@ export function IssuePreviewPane({
   return (
     <div className="flex min-w-0 flex-1 flex-col bg-muted/20">
       {/* Status Panel Header */}
-      <header className="flex h-14 shrink-0 items-center border-b border-border px-4 bg-background">
+      <header className="flex h-14 shrink-0 items-center border-b border-border bg-background px-4">
         <IssueSandboxStatusPanel
           heartbeatAction={heartbeatAction}
           onPreviewUrlChange={handlePreviewUrlChange}

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import { ModeToggle } from "~/components/mode-toggle";
 import { cn } from "~/lib/utils";
 
 type SandboxStatus = "starting" | "installing" | "running" | "stopped" | "error";
@@ -503,6 +504,7 @@ export function IssueSandboxStatusPanel({
             </Button>
           </>
         ) : null}
+        <ModeToggle />
       </div>
     </div>
   );

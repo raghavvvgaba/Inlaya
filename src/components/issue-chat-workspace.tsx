@@ -2,12 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { ExternalLink, GitPullRequest, LoaderCircle } from "lucide-react";
+import { ExternalLink, GitPullRequest, LoaderCircle, PanelLeftClose } from "lucide-react";
 import { toast } from "sonner";
 
 import { AIChat, type AIChatMessage } from "~/components/ui/ai-chat";
 import { Button } from "~/components/ui/button";
 import { ChatInputBox } from "~/components/ui/chat-input-box";
+import { useSidebar } from "~/components/issue-workspace-layout";
 import { buildIssueChatRuntimeMessage } from "~/lib/issue-chat-messages";
 
 type IssueChatWorkspaceProps = {
@@ -81,6 +82,7 @@ export function IssueChatWorkspace({
   const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(null);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
   const [submitSessionId, setSubmitSessionId] = useState<string | null>(null);
+  const { setIsOpen } = useSidebar();
 
   const thinkingMessage = useMemo<AIChatMessage>(
     () => ({
@@ -309,9 +311,19 @@ export function IssueChatWorkspace({
     <div className="flex min-h-0 flex-1 flex-col">
       {issueTitle ? (
         <div className="mb-2 flex flex-wrap items-center justify-between gap-3 px-4 pt-4">
-          <h1 className="min-w-0 flex-1 text-sm font-bold uppercase tracking-tight line-clamp-2">
-            {issueTitle}
-          </h1>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 shrink-0 rounded-none text-muted-foreground hover:bg-muted hover:text-foreground"
+              onClick={() => setIsOpen(false)}
+            >
+              <PanelLeftClose className="h-3.5 w-3.5" />
+            </Button>
+            <h1 className="min-w-0 flex-1 text-sm font-bold uppercase tracking-tight line-clamp-2">
+              {issueTitle}
+            </h1>
+          </div>
           <div className="flex shrink-0 items-center gap-2">
             {pullRequestUrl ? (
               <Button
