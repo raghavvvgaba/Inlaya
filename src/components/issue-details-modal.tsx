@@ -53,7 +53,7 @@ export function IssueDetailsModal({
         <Button
           size="sm"
           variant="outline"
-          className="rounded-full border-border px-4 text-[10px] font-bold uppercase tracking-[0.22em]"
+          className="rounded-none border-border px-4 text-[10px] font-bold uppercase tracking-[0.22em]"
         >
           <FileText className="h-3.5 w-3.5" />
           View Issue
@@ -61,7 +61,7 @@ export function IssueDetailsModal({
       </SheetTrigger>
       <SheetContent
         side="right"
-        className="!inset-y-auto !right-auto !left-1/2 !top-1/2 !h-auto !w-[min(46rem,calc(100vw-2rem))] !max-w-none !-translate-x-1/2 !-translate-y-1/2 rounded-[2rem] border border-border bg-background p-0"
+        className="!inset-y-auto !right-auto !left-1/2 !top-1/2 !h-auto !w-[min(46rem,calc(100vw-2rem))] !max-w-none !-translate-x-1/2 !-translate-y-1/2 rounded-none border border-border bg-background p-0"
       >
         <SheetHeader className="border-b border-border px-6 py-5">
           <SheetDescription className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
@@ -75,17 +75,17 @@ export function IssueDetailsModal({
         <div className="space-y-6 px-6 py-6">
           <div className="flex flex-wrap gap-2">
             {author ? (
-              <span className="rounded-full border border-border bg-muted px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              <span className="rounded-none border border-border bg-muted px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                 @{author}
               </span>
             ) : null}
             {state ? (
-              <span className="rounded-full border border-border bg-muted px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              <span className="rounded-none border border-border bg-muted px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                 {state}
               </span>
             ) : null}
             {typeof comments === "number" ? (
-              <span className="rounded-full border border-border bg-muted px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              <span className="rounded-none border border-border bg-muted px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                 {comments} comments
               </span>
             ) : null}
@@ -110,7 +110,7 @@ export function IssueDetailsModal({
             ) : null}
           </div>
 
-          <div className="rounded-[1.5rem] border border-border bg-muted/30 px-5 py-4">
+          <div className="rounded-none border border-border bg-muted/30 px-5 py-4">
             <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
               Issue Details
             </p>

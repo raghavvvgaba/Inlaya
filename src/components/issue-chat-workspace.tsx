@@ -16,6 +16,7 @@ type IssueChatWorkspaceProps = {
   initialInstruction: string;
   initialMessages: AIChatMessage[];
   issueNumber: number;
+  issueTitle?: string;
   projectId: string;
   sessionAction: string;
   submitAction: string;
@@ -67,6 +68,7 @@ export function IssueChatWorkspace({
   initialInstruction,
   initialMessages,
   issueNumber,
+  issueTitle,
   projectId,
   sessionAction,
   submitAction,
@@ -304,51 +306,47 @@ export function IssueChatWorkspace({
   }
 
   return (
-    <AIChat
-      className="h-auto min-h-[32rem]"
-      fullBleed
-      messages={messages}
-    >
-      <div className="mb-3 rounded-[1.5rem] border border-white/10 bg-white/[0.03] px-3 py-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45">
-              <GitPullRequest className="h-3.5 w-3.5" />
-              Submit Changes
-            </div>
-            <p className="mt-1 truncate text-xs text-white/55">
-              {submitMessage ?? "Commit, push, and create a pull request."}
-            </p>
-          </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
+    <div className="flex min-h-0 flex-1 flex-col">
+      {issueTitle ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h1 className="min-w-0 flex-1 text-sm font-bold uppercase tracking-tight line-clamp-2">
+            {issueTitle}
+          </h1>
+          <div className="flex shrink-0 items-center gap-2">
             {pullRequestUrl ? (
               <Button
                 asChild
-                className="h-8 rounded-full border-white/10 bg-transparent px-3 text-[11px] text-white/75 hover:bg-white/10 hover:text-white"
+                className="h-6 rounded-none border-border bg-transparent px-2 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
                 variant="outline"
               >
                 <a href={pullRequestUrl} rel="noreferrer" target="_blank">
-                  <ExternalLink className="h-4 w-4" />
+                  <ExternalLink className="mr-1 h-3 w-3" />
                   Open PR
                 </a>
               </Button>
             ) : null}
             <Button
-              className="h-8 rounded-full bg-cyan-500 px-3 text-[11px] font-medium text-black hover:bg-cyan-400"
+              className="h-6 rounded-none px-2 text-[10px] font-medium"
               disabled={accessBlocked || isRunning || isSubmitting}
               onClick={handleSubmitChanges}
               type="button"
             >
               {isSubmitting ? (
-                <LoaderCircle className="h-4 w-4 animate-spin" />
+                <LoaderCircle className="mr-1 h-3 w-3 animate-spin" />
               ) : (
-                <GitPullRequest className="h-4 w-4" />
+                <GitPullRequest className="mr-1 h-3 w-3" />
               )}
               {isSubmitting ? "Submitting" : "Submit"}
             </Button>
           </div>
         </div>
-      </div>
+      ) : null}
+
+      <AIChat
+        className="flex min-h-0 flex-1 flex-col"
+        fullBleed
+        messages={messages}
+      >
       <ChatInputBox
         accessBlocked={accessBlocked}
         instruction={instruction}
@@ -356,6 +354,7 @@ export function IssueChatWorkspace({
         onInstructionChange={setInstruction}
         onPrepareEdit={handleRunAgent}
       />
-    </AIChat>
+      </AIChat>
+    </div>
   );
 }

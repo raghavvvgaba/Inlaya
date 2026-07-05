@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ChevronDown,
   ExternalLink,
   LoaderCircle,
   Play,
@@ -81,11 +80,11 @@ const statusCopy: Record<SandboxStatus, string> = {
 };
 
 const statusStyles: Record<SandboxStatus, string> = {
-  starting: "border-cyan-500/30 bg-cyan-500/10 text-cyan-100",
-  installing: "border-blue-500/30 bg-blue-500/10 text-blue-100",
-  running: "border-emerald-500/30 bg-emerald-500/10 text-emerald-100",
-  stopped: "border-white/10 bg-white/[0.04] text-white/60",
-  error: "border-red-500/30 bg-red-500/10 text-red-100",
+  starting: "border-cyan-500/30 bg-cyan-500/10 text-cyan-700 dark:text-cyan-100",
+  installing: "border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-100",
+  running: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-100",
+  stopped: "border-border bg-muted text-muted-foreground",
+  error: "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-100",
 };
 
 function getErrorMessage(error: unknown) {
@@ -141,7 +140,6 @@ export function IssueSandboxStatusPanel({
   const [isStarting, setIsStarting] = useState(false);
   const [isRestarting, setIsRestarting] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
-  const [showDiagnostics, setShowDiagnostics] = useState(false);
   const isActive = session ? ACTIVE_STATUSES.has(session.status) : false;
   const canStart = !session || session.status === "stopped" || session.status === "error";
   const canOpenPreview =
@@ -383,147 +381,120 @@ export function IssueSandboxStatusPanel({
   }
 
   return (
-      <section className="mb-4 overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/[0.32] shadow-[0_18px_60px_rgba(0,0,0,0.24)]">
-        <div className="flex flex-col gap-4 px-4 py-4 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0 space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-white/45">
-                Live Preview Environment
-              </p>
-              <span
-                className={cn(
-                  "rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em]",
-                  statusStyles[status],
-                )}
-              >
-                {statusCopy[status]}
-              </span>
-            </div>
-            <p className="max-w-3xl whitespace-pre-line text-sm leading-6 text-white/68">
-              {displayMessage}
+    <div className="flex w-full items-center justify-between gap-4">
+      {/* Left side: Status and Real-time message */}
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <span
+          className={cn(
+            "shrink-0 rounded-none border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em]",
+            statusStyles[status],
+          )}
+        >
+          {statusCopy[status]}
+        </span>
+        
+        {/* Ticker / Current Message */}
+        <div className="flex min-w-0 flex-1 flex-col">
+          <p className="truncate text-xs font-medium text-foreground">
+            {displayMessage}
+          </p>
+          {session?.previewUrl && canOpenPreview ? (
+            <p className="truncate font-mono text-[10px] text-muted-foreground">
+              {session.previewUrl}
             </p>
-            {session?.previewUrl && canOpenPreview ? (
-              <p className="truncate font-mono text-xs text-white/38">
-                {session.previewUrl}
-              </p>
-            ) : null}
-            {error ? (
-              <p className="text-sm leading-6 text-red-200">
-                {error}
-              </p>
-            ) : null}
-          </div>
-
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            {canStart ? (
-              <Button
-                className="rounded-full bg-white text-black hover:bg-white/85"
-                disabled={isStarting}
-                onClick={handleStart}
-                type="button"
-              >
-                {isStarting ? (
-                  <LoaderCircle className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Play className="h-4 w-4" />
-                )}
-                {isStarting ? "Starting" : "Start Sandbox"}
-              </Button>
-            ) : null}
-
-            {session?.previewUrl && canOpenPreview ? (
-              <Button
-                asChild
-                className="rounded-full bg-cyan-500 text-black hover:bg-cyan-400"
-              >
-                <a href={session.previewUrl} rel="noreferrer" target="_blank">
-                  <ExternalLink className="h-4 w-4" />
-                  Open Preview
-                </a>
-              </Button>
-            ) : null}
-
-            {session?.previewUrl && !canOpenPreview && session.status !== "stopped" ? (
-              <Button
-                className="rounded-full border-white/10 bg-transparent text-white/45"
-                disabled
-                type="button"
-                variant="outline"
-              >
-                <LoaderCircle className="h-4 w-4 animate-spin" />
-                Preview starting
-              </Button>
-            ) : null}
-
-            {session && session.status !== "stopped" ? (
-              <>
-                <Button
-                  className="rounded-full border-white/10 bg-transparent text-white/75 hover:bg-white/10 hover:text-white"
-                  disabled={isRestarting || isStopping}
-                  onClick={handleRestartPreview}
-                  type="button"
-                  variant="outline"
-                >
-                  {isRestarting ? (
-                    <LoaderCircle className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="h-4 w-4" />
-                  )}
-                  {isRestarting ? "Restarting" : "Restart"}
-                </Button>
-                <Button
-                  className="rounded-full border-red-500/30 bg-transparent text-red-100 hover:bg-red-500/10"
-                  disabled={isStopping || isRestarting}
-                  onClick={handleStop}
-                  type="button"
-                  variant="outline"
-                >
-                  {isStopping ? (
-                    <LoaderCircle className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Square className="h-4 w-4" />
-                  )}
-                  {isStopping ? "Stopping" : "Stop"}
-                </Button>
-              </>
-            ) : null}
-
-            {session?.logs.length ? (
-              <Button
-                className="rounded-full border-white/10 bg-transparent text-white/55 hover:bg-white/10 hover:text-white"
-                onClick={() => {
-                  setShowDiagnostics((current) => !current);
-                }}
-                type="button"
-                variant="outline"
-              >
-                <ChevronDown
-                  className={cn(
-                    "h-4 w-4 transition-transform",
-                    showDiagnostics ? "rotate-180" : "",
-                  )}
-                />
-                Diagnostics
-              </Button>
-            ) : null}
-          </div>
+          ) : error ? (
+            <p className="truncate text-[10px] text-destructive">
+              {error}
+            </p>
+          ) : (session?.logs && session.logs.length > 0) ? (
+            <p className="truncate font-mono text-[10px] text-muted-foreground">
+              {session.logs[session.logs.length - 1]?.trim() || "Waiting for logs..."}
+            </p>
+          ) : null}
         </div>
+      </div>
 
-        {showDiagnostics && session?.logs.length ? (
-          <div className="border-t border-white/10 bg-black/35 px-4 py-4 sm:px-5">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-white/45">
-                Sandbox Logs
-              </p>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/30">
-                {session.logs.length} lines
-              </p>
-            </div>
-            <pre className="max-h-72 overflow-auto rounded-[1rem] border border-white/10 bg-black/55 p-3 font-mono text-xs leading-5 text-white/68">
-              {session.logs.join("")}
-            </pre>
-          </div>
+      {/* Right side: Controls */}
+      <div className="flex shrink-0 items-center gap-2">
+        {canStart ? (
+          <Button
+            className="h-8 rounded-none text-xs"
+            disabled={isStarting}
+            onClick={handleStart}
+            size="sm"
+            type="button"
+          >
+            {isStarting ? (
+              <LoaderCircle className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Play className="mr-1.5 h-3.5 w-3.5" />
+            )}
+            {isStarting ? "Starting" : "Start"}
+          </Button>
         ) : null}
-      </section>
+
+        {session?.previewUrl && canOpenPreview ? (
+          <Button
+            asChild
+            size="sm"
+            variant="secondary"
+            className="h-8 rounded-none text-xs"
+          >
+            <a href={session.previewUrl} rel="noreferrer" target="_blank">
+              <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+              Preview
+            </a>
+          </Button>
+        ) : null}
+
+        {session?.previewUrl && !canOpenPreview && session.status !== "stopped" ? (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 rounded-none text-xs text-muted-foreground"
+            disabled
+            type="button"
+          >
+            <LoaderCircle className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+            Wait
+          </Button>
+        ) : null}
+
+        {session && session.status !== "stopped" ? (
+          <>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 rounded-none text-xs"
+              disabled={isRestarting || isStopping}
+              onClick={handleRestartPreview}
+              type="button"
+            >
+              {isRestarting ? (
+                <LoaderCircle className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+              )}
+              {isRestarting ? "Restarting" : "Restart"}
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              className="h-8 rounded-none text-xs"
+              disabled={isStopping || isRestarting}
+              onClick={handleStop}
+              type="button"
+            >
+              {isStopping ? (
+                <LoaderCircle className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Square className="mr-1.5 h-3.5 w-3.5" />
+              )}
+              {isStopping ? "Stopping" : "Stop"}
+            </Button>
+          </>
+        ) : null}
+      </div>
+    </div>
   );
 }
