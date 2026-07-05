@@ -337,10 +337,10 @@ export default function HomePage() {
                               { text: "Add FAQ entry", branch: "sam/marketing" },
                               { text: "Fix nav hover", branch: "alex/design" }
                             ].map((ticket, i) => (
-                              <div key={i} className="inline-flex items-center gap-3 px-5 py-3 bg-background border border-border rounded-full text-sm font-medium text-foreground shadow-sm">
-                                <span className="w-1.5 h-1.5 rounded-full bg-foreground/80"></span>
-                                <span>{ticket.text}</span>
-                                <span className="font-mono text-xs text-muted-foreground opacity-60 ml-1">{ticket.branch}</span>
+                              <div key={i} className="inline-flex items-center gap-2.5 px-4 py-2 bg-background border border-border/80 rounded-full text-[13px] font-medium text-foreground shadow-sm">
+                                <span className="w-1 h-1 rounded-full bg-foreground/80 shrink-0"></span>
+                                <span className="font-medium tracking-tight">{ticket.text}</span>
+                                <span className="font-mono text-[11px] text-muted-foreground/50 ml-3 tracking-normal">{ticket.branch}</span>
                               </div>
                             ))}
                           </div>

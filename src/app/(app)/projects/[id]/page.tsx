@@ -15,6 +15,8 @@ import { AppShell } from "~/components/app-shell";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { CreateIssueDialog } from "~/components/create-issue-dialog";
+import { ProjectIssuesRefreshOnReturn } from "~/components/project-issues-refresh-on-return";
 import { env } from "~/env";
 import { getAuth } from "~/server/auth/session";
 import { getProjectPageData } from "~/server/projects";
@@ -47,6 +49,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
 
   return (
     <AppShell compactHeader description="" title="Project">
+      <ProjectIssuesRefreshOnReturn projectId={project.id} />
       <div className="space-y-7">
         <section className="space-y-4 border-b border-border pb-5">
           <div className="flex items-start justify-between gap-4">
@@ -95,6 +98,9 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
             Repository Issues
           </h2>
         </div>
+        {issuesResult.status === "ok" ? (
+          <CreateIssueDialog projectId={project.id} />
+        ) : null}
       </div>
 
       {issuesResult.status === "missing_access" ? (
@@ -200,11 +206,10 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
                 <Button
                   asChild
                   variant="outline"
-                  className="rounded-md font-medium text-xs h-9 px-4"
+                  className="rounded-md h-9 w-9 p-0"
                 >
-                  <a href={issue.url} rel="noreferrer" target="_blank">
-                    GitHub
-                    <ExternalLink className="ml-2 h-3.5 w-3.5" />
+                  <a href={issue.url} rel="noreferrer" target="_blank" aria-label="View on GitHub">
+                    <ExternalLink className="h-3.5 w-3.5" />
                   </a>
                 </Button>
               </div>

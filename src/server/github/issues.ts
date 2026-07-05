@@ -217,3 +217,55 @@ export async function fetchProjectIssue(
     },
   )();
 }
+
+export type CreateIssueResult = {
+  number: number;
+  title: string;
+  url: string;
+};
+
+export async function createProjectIssue(input: {
+  body?: string;
+  installationToken: string;
+  repoName: string;
+  repoOwner: string;
+  title: string;
+}): Promise<CreateIssueResult> {
+  const response = await fetch(
+    `https://api.github.com/repos/${input.repoOwner}/${input.repoName}/issues`,
+    {
+      body: JSON.stringify({
+        body: input.body ?? "",
+        title: input.title,
+      }),
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${input.installationToken}`,
+        "Content-Type": "application/json",
+        "User-Agent": "devin-app",
+        "X-GitHub-Api-Version": GITHUB_API_VERSION,
+      },
+      method: "POST",
+    },
+  );
+
+  if (response.status === 403 || response.status === 404) {
+    throw new Error("github_access_missing");
+  }
+
+  if (!response.ok) {
+    throw new Error("github_create_issue_failed");
+  }
+
+  const issue = (await response.json()) as {
+    html_url: string;
+    number: number;
+    title: string;
+  };
+
+  return {
+    number: issue.number,
+    title: issue.title,
+    url: issue.html_url,
+  };
+}
