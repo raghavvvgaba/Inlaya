@@ -56,6 +56,7 @@ type SavedSandboxSession = {
 
 type IssueSandboxStatusPanelProps = {
   heartbeatAction: string;
+  onPreviewUrlChange?: (previewUrl: string | null) => void;
   projectId: string;
   restartPreviewAction: string;
   sessionAction: string;
@@ -128,6 +129,7 @@ async function readSandboxResponse(response: Response) {
 
 export function IssueSandboxStatusPanel({
   heartbeatAction,
+  onPreviewUrlChange,
   projectId,
   restartPreviewAction,
   sessionAction,
@@ -151,6 +153,13 @@ export function IssueSandboxStatusPanel({
       : session?.startupMessage ?? session?.previewMessage ?? session?.message;
   const displayMessage =
     statusMessage ?? "Start a preview environment for this issue.";
+
+  // Notify parent when preview URL availability changes
+  useEffect(() => {
+    if (onPreviewUrlChange) {
+      onPreviewUrlChange(canOpenPreview && session?.previewUrl ? session.previewUrl : null);
+    }
+  }, [canOpenPreview, session?.previewUrl, onPreviewUrlChange]);
 
   const saveSession = useCallback(
     (nextSession: SandboxSession) => {

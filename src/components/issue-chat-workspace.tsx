@@ -308,7 +308,7 @@ export function IssueChatWorkspace({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {issueTitle ? (
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-3 px-4 pt-4">
           <h1 className="min-w-0 flex-1 text-sm font-bold uppercase tracking-tight line-clamp-2">
             {issueTitle}
           </h1>
@@ -343,7 +343,7 @@ export function IssueChatWorkspace({
       ) : null}
 
       <AIChat
-        className="flex min-h-0 flex-1 flex-col"
+        className="flex min-h-0 flex-1 flex-col border-x-0 border-b-0"
         fullBleed
         messages={messages}
       >

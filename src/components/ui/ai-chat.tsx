@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { Bot, CheckCircle2, Sparkles, TriangleAlert, User2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -26,37 +25,6 @@ const toneStyles: Record<NonNullable<AIChatMessage["tone"]>, string> = {
   warning: "border-amber-500/20 bg-amber-500/10 text-amber-50",
   error: "border-red-500/20 bg-red-500/10 text-red-50",
 };
-
-const toneIcons: Record<NonNullable<AIChatMessage["tone"]>, React.ReactNode> = {
-  default: <Sparkles className="h-3.5 w-3.5" />,
-  success: <CheckCircle2 className="h-3.5 w-3.5" />,
-  warning: <TriangleAlert className="h-3.5 w-3.5" />,
-  error: <TriangleAlert className="h-3.5 w-3.5" />,
-};
-
-function getMessageLabel(message: AIChatMessage) {
-  if (message.isThinking) {
-    return "Devin";
-  }
-
-  if (message.role === "user") {
-    return "You";
-  }
-
-  if (message.role === "assistant") {
-    return "Devin";
-  }
-
-  if (message.tone === "error") {
-    return "Error";
-  }
-
-  if (message.tone === "warning") {
-    return "Notice";
-  }
-
-  return "System";
-}
 
 function MarkdownMessageBody({
   body,
@@ -125,48 +93,16 @@ export function AIChat({
                   isUser ? "justify-end" : "justify-start",
                 )}
               >
-                {!isUser ? (
-                  <div
-                    className={cn(
-                      "mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-none border",
-                      message.role === "system"
-                        ? "border-amber-500/25 bg-amber-500/10 text-amber-100"
-                        : "border-cyan-500/20 bg-cyan-500/10 text-cyan-100",
-                    )}
-                  >
-                    {message.role === "system" ? (
-                      toneIcons[tone]
-                    ) : (
-                      <Bot className="h-3.5 w-3.5" />
-                    )}
-                  </div>
-                ) : null}
-
                 <div
                   className={cn(
-                    "max-w-[min(42rem,92%)] rounded-none border px-3 py-3 sm:px-4",
+                    "max-w-[min(42rem,92%)]",
                     isUser
-                      ? "border-white/10 bg-white text-black shadow-[0_10px_30px_rgba(255,255,255,0.08)]"
-                      : toneStyles[tone],
+                      ? "rounded-none border border-white/10 bg-white px-3 py-3 text-black shadow-[0_10px_30px_rgba(255,255,255,0.08)] sm:px-4"
+                      : cn("py-2", tone !== "default" && toneStyles[tone] && "px-3 py-3 border"),
                   )}
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-1.5">
-                        {isUser ? (
-                          <span className="flex h-5 w-5 items-center justify-center rounded-none bg-black/5 text-black">
-                            <User2 className="h-3 w-3" />
-                          </span>
-                        ) : null}
-                        <p
-                          className={cn(
-                            "text-[9px] font-semibold uppercase tracking-[0.2em]",
-                            isUser ? "text-black/55" : "text-white/55",
-                          )}
-                        >
-                          {getMessageLabel(message)}
-                        </p>
-                      </div>
+                    <div className="w-full min-w-0 space-y-1">
                       <div>
                         {message.isThinking ? (
                           <span className="flex items-center gap-2">

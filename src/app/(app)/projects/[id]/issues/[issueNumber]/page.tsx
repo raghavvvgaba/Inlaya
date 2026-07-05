@@ -5,7 +5,7 @@ import { ChevronLeft, ExternalLink } from "lucide-react";
 import { AppShell } from "~/components/app-shell";
 import { IssueChatWorkspace } from "~/components/issue-chat-workspace";
 import { IssueDetailsModal } from "~/components/issue-details-modal";
-import { IssueSandboxStatusPanel } from "~/components/issue-sandbox-status-panel";
+import { IssuePreviewPane } from "~/components/issue-preview-pane";
 import { Button } from "~/components/ui/button";
 import { getAuth } from "~/server/auth/session";
 import { getIssueWorkspacePageData } from "~/server/projects";
@@ -91,7 +91,7 @@ export default async function ProjectIssuePage({
         </header>
 
         {/* Chat / Body */}
-        <div className="flex min-h-0 flex-1 flex-col p-4">
+        <div className="flex min-h-0 flex-1 flex-col">
           <IssueChatWorkspace
             accessBlocked={accessBlocked}
             agentAction={agentAction}
@@ -107,27 +107,14 @@ export default async function ProjectIssuePage({
       </div>
 
       {/* Right Pane - Preview */}
-      <div className="flex min-w-0 flex-1 flex-col bg-muted/20">
-        {/* Status Panel Header */}
-        <header className="flex h-14 shrink-0 items-center border-b border-border px-4 bg-background">
-          <IssueSandboxStatusPanel
-            heartbeatAction={`${sandboxBaseAction}/heartbeat`}
-            projectId={project.id}
-            restartPreviewAction={`${sandboxBaseAction}/restart-preview`}
-            sessionAction={`${sandboxBaseAction}/session`}
-            startAction={`${sandboxBaseAction}/start`}
-            stopAction={`${sandboxBaseAction}/stop`}
-          />
-        </header>
-
-        {/* Preview Placeholder */}
-        <div className="flex flex-1 items-center justify-center">
-          <div className="text-center text-muted-foreground">
-            <p className="text-lg font-medium">Preview</p>
-            <p className="text-sm">Preview functionality will be implemented later.</p>
-          </div>
-        </div>
-      </div>
+      <IssuePreviewPane
+        heartbeatAction={`${sandboxBaseAction}/heartbeat`}
+        projectId={project.id}
+        restartPreviewAction={`${sandboxBaseAction}/restart-preview`}
+        sessionAction={`${sandboxBaseAction}/session`}
+        startAction={`${sandboxBaseAction}/start`}
+        stopAction={`${sandboxBaseAction}/stop`}
+      />
     </div>
   );
 }
