@@ -12,16 +12,16 @@ import { Button } from "~/components/ui/button";
 import { NewImportModal } from "~/components/new-import-modal";
 import { env } from "~/env";
 import { getAuth } from "~/server/auth/session";
-import { getDashboardPageData } from "~/server/projects";
+import { getProjectsPageData } from "~/server/projects";
 
-type DashboardPageProps = {
+type ProjectsPageProps = {
   searchParams: Promise<{ owner?: string, newImport?: string, success?: string, error?: string }>;
 };
 
-export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+export default async function ProjectsPage({ searchParams }: ProjectsPageProps) {
   const { userId } = await getAuth();
   const params = await searchParams;
-  const { githubStatus, projects } = await getDashboardPageData(userId!);
+  const { githubStatus, projects } = await getProjectsPageData(userId!);
   
   const defaultOpen = !!params.newImport || !!params.success || !!params.error;
 
@@ -30,7 +30,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   return (
     <AppShell
       description=""
-      title="Dashboard"
+      title="Projects"
     >
       <div className="flex justify-end pb-8">
         <div className="flex flex-wrap items-center gap-2">

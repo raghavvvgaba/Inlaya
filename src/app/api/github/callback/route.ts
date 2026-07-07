@@ -55,7 +55,7 @@ export async function GET(request: Request) {
       await writeGithubImportSession(githubImportSession.accessToken);
 
       return NextResponse.redirect(
-        new URL("/dashboard?newImport=true&success=import_session_ready", request.url),
+        new URL("/projects?newImport=true&success=import_session_ready", request.url),
       );
     }
 

@@ -77,10 +77,10 @@ export default function HomePage() {
                 <SignedIn>
                   <Link
                     className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition-all bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 h-8 rounded-md px-4"
-                    href="/dashboard"
+                    href="/projects"
                   >
                     <LayoutDashboard className="h-4 w-4" />
-                    Dashboard
+                    Projects
                   </Link>
                 </SignedIn>
               </div>
@@ -121,8 +121,8 @@ export default function HomePage() {
                     </Link>
                   </SignedOut>
                   <SignedIn>
-                    <Link href="/dashboard" className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition-all bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 h-12 rounded-md px-8 w-full sm:w-auto">
-                      Go to Dashboard
+                    <Link href="/projects" className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition-all bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 h-12 rounded-md px-8 w-full sm:w-auto">
+                      Go to Projects
                       <ArrowRight className="h-4 w-4" />
                     </Link>
                   </SignedIn>

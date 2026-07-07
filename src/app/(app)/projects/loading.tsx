@@ -1,9 +1,9 @@
 import { AppShell } from "~/components/app-shell";
 import { Skeleton } from "~/components/ui/skeleton";
 
-export default function DashboardLoading() {
+export default function ProjectsLoading() {
   return (
-    <AppShell description="" title="Dashboard">
+    <AppShell description="" title="Projects">
       <div className="flex justify-end pb-8">
         <div className="flex gap-2">
           <Skeleton className="h-6 w-24 rounded-none" />
@@ -25,7 +25,7 @@ export default function DashboardLoading() {
           {Array.from({ length: 3 }).map((_, index) => (
             <div
               className="flex items-center justify-between border border-border bg-card p-4"
-              key={`dashboard-loading-${index}`}
+              key={`projects-loading-${index}`}
             >
               <div className="flex items-center gap-4">
                 <Skeleton className="h-10 w-10 rounded-none" />

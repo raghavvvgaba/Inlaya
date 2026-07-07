@@ -1,6 +1,7 @@
 import "~/styles/globals.css";
 
 import { ClerkProvider } from "@clerk/nextjs";
+import { dark } from "@clerk/themes";
 import { type Metadata } from "next";
 import { ThemeProvider } from "~/components/theme-provider";
 import { TooltipProvider } from "~/components/ui/tooltip";
@@ -16,7 +17,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <ClerkProvider>
+    <ClerkProvider appearance={{ baseTheme: dark }}>
       <html lang="en" className="antialiased" suppressHydrationWarning>
         <body className="font-sans min-h-screen bg-background">
           <ThemeProvider

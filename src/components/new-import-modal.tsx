@@ -6,7 +6,7 @@ import { useEffect, useState, useTransition } from "react";
 import { Database, ExternalLink, ShieldAlert, ShieldCheck, X } from "lucide-react";
 import { toast } from "sonner";
 
-import { fetchImportModalData } from "~/app/(app)/dashboard/actions";
+import { fetchImportModalData } from "~/app/(app)/projects/actions";
 import { ImportGuidePopup } from "~/components/import-guide-popup";
 import { ImportLoadButton } from "~/components/import-load-button";
 import { RepositoryOwnerFilter } from "~/components/repository-owner-filter";

@@ -58,9 +58,9 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
               variant="outline"
               className="h-9 rounded-md border-border px-3 text-xs font-medium"
             >
-              <Link href="/dashboard">
+              <Link href="/projects">
                 <ChevronLeft className="mr-1.5 h-4 w-4" />
-                Return to Dashboard
+                Return to Projects
               </Link>
             </Button>
             <Button

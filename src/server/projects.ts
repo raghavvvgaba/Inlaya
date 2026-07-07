@@ -99,7 +99,7 @@ export async function listImportedProjectsForUser(userId: string) {
   });
 }
 
-export async function getDashboardPageData(userId: string) {
+export async function getProjectsPageData(userId: string) {
   const [projects, githubStatus] = await Promise.all([
     listProjectsForUser(userId),
     getGithubConnectionStatus(userId),
