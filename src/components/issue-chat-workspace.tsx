@@ -10,6 +10,7 @@ import { Button } from "~/components/ui/button";
 import { ChatInputBox } from "~/components/ui/chat-input-box";
 import { useSidebar } from "~/components/issue-workspace-layout";
 import { buildIssueChatRuntimeMessage } from "~/lib/issue-chat-messages";
+import { sandboxSessionUpdatedEvent } from "~/lib/sandbox-events";
 
 type IssueChatWorkspaceProps = {
   accessBlocked: boolean;
@@ -225,6 +226,11 @@ export function IssueChatWorkspace({
         ),
         ...nextMessages,
       ]);
+      window.dispatchEvent(
+        new CustomEvent(sandboxSessionUpdatedEvent, {
+          detail: { projectId, sessionId },
+        }),
+      );
       router.refresh();
     } catch {
       setMessages((current) => [

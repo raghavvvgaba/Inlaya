@@ -12,9 +12,35 @@ import { verifySandboxHealth } from "~/server/sandbox/providers/e2b/sandbox-ops"
 import {
   appendLog,
   describeSessionError,
+  publicSession,
+  setPreviewError,
   setPreviewState,
 } from "~/server/sandbox/providers/e2b/session-state";
 import type { E2BSandboxSession } from "~/server/sandbox/providers/e2b/types";
+
+const VITE_REACT_ERROR_MARKERS = [
+  "vite-error-overlay",
+  "plugin:vite",
+  "[vite] Internal server error",
+  "Failed to resolve import",
+  "React is not defined",
+  "ReferenceError:",
+  "TypeError:",
+] as const;
+
+export type VitePreviewContentCheckResult =
+  | { ok: true }
+  | {
+      details: string;
+      marker?: string;
+      ok: false;
+      reason:
+        | "blank_preview"
+        | "browser_check_failed"
+        | "empty_preview"
+        | "fetch_failed"
+        | "runtime_error_marker";
+    };
 
 function getPreviewVersionUrl(session: E2BSandboxSession) {
   return `${session.previewUrl.replace(/\/$/, "")}/${PREVIEW_VERSION_PATH}`;
@@ -171,6 +197,181 @@ async function isPreviewUrlReachable(session: E2BSandboxSession) {
   }
 }
 
+function getHtmlBody(html: string) {
+  const bodyMatch = /<body\b[^>]*>([\s\S]*?)<\/body>/i.exec(html);
+  return bodyMatch?.[1] ?? html;
+}
+
+export function checkViteReactPreviewHtml(html: string): VitePreviewContentCheckResult {
+  const trimmedHtml = html.trim();
+  const normalizedHtml = trimmedHtml.replace(/\s+/g, " ");
+
+  if (trimmedHtml.length < 80) {
+    return {
+      details: "Preview response was empty or too small to be a Vite React page.",
+      ok: false,
+      reason: "empty_preview",
+    };
+  }
+
+  const matchedMarker = VITE_REACT_ERROR_MARKERS.find((marker) =>
+    normalizedHtml.includes(marker),
+  );
+
+  if (matchedMarker) {
+    return {
+      details: `Vite React preview response contained "${matchedMarker}".`,
+      marker: matchedMarker,
+      ok: false,
+      reason: "runtime_error_marker",
+    };
+  }
+
+  const body = getHtmlBody(trimmedHtml);
+  const hasReactMount = /\bid=["']root["']/.test(body);
+  const hasModuleScript = /<script\b[^>]*\btype=["']module["']/i.test(body);
+
+  if (!hasReactMount && !hasModuleScript && body.trim().length < 80) {
+    return {
+      details: "Preview body was empty or missing the Vite React mount point.",
+      ok: false,
+      reason: "empty_preview",
+    };
+  }
+
+  return { ok: true };
+}
+
+export async function checkViteReactPreviewContent(
+  session: E2BSandboxSession,
+): Promise<VitePreviewContentCheckResult> {
+  try {
+    const response = await fetch(session.previewUrl, {
+      signal: AbortSignal.timeout(4000),
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return {
+        details: `Preview returned HTTP ${response.status}.`,
+        ok: false,
+        reason: "fetch_failed",
+      };
+    }
+
+    return checkViteReactPreviewHtml(await response.text());
+  } catch (error) {
+    return {
+      details: error instanceof Error ? error.message : "Unable to fetch preview HTML.",
+      ok: false,
+      reason: "fetch_failed",
+    };
+  }
+}
+
+async function applyViteReactPreviewContentCheck(session: E2BSandboxSession) {
+  const result = await checkViteReactPreviewContent(session);
+  if (!result.ok) {
+    appendLog(session, `Preview check failed: ${result.details}\n`);
+    setPreviewError(session, result.details);
+    return false;
+  }
+
+  const browserResult = await checkViteReactPreviewBrowser(session);
+  if (browserResult.ok) {
+    setPreviewError(session);
+    return true;
+  }
+
+  if (browserResult.reason === "browser_check_failed") {
+    appendLog(session, `Preview browser check skipped: ${browserResult.details}\n`);
+    setPreviewError(session);
+    return true;
+  }
+
+  appendLog(session, `Preview browser check failed: ${browserResult.details}\n`);
+  setPreviewError(session, browserResult.details);
+  return false;
+}
+
+export async function checkPreviewContentForDiagnostics(session: E2BSandboxSession) {
+  appendLog(session, "\nManual preview error check requested.\n");
+  await applyViteReactPreviewContentCheck(session);
+  return publicSession(session);
+}
+
+export async function checkViteReactPreviewBrowser(
+  session: E2BSandboxSession,
+): Promise<VitePreviewContentCheckResult> {
+  try {
+    const { chromium } = await import("playwright");
+    const browser = await chromium.launch({ headless: true });
+
+    try {
+      const page = await browser.newPage();
+      const observedErrors: string[] = [];
+
+      page.on("console", (message) => {
+        if (message.type() === "error") {
+          observedErrors.push(message.text());
+        }
+      });
+      page.on("pageerror", (error) => {
+        observedErrors.push(error.message);
+      });
+
+      await page.goto(session.previewUrl, {
+        timeout: 8_000,
+        waitUntil: "domcontentloaded",
+      });
+      await page.waitForTimeout(1_500);
+
+      const rootState = await page.evaluate(() => {
+        const root = document.querySelector("#root");
+        const bodyText = document.body.innerText.trim();
+
+        return {
+          bodyTextLength: bodyText.length,
+          hasRoot: Boolean(root),
+          rootChildCount: root?.childElementCount ?? 0,
+          rootTextLength: root?.textContent?.trim().length ?? 0,
+        };
+      });
+
+      if (observedErrors.length > 0) {
+        return {
+          details: observedErrors[0] ?? "Browser console error.",
+          ok: false,
+          reason: "runtime_error_marker",
+        };
+      }
+
+      if (
+        rootState.hasRoot &&
+        rootState.rootChildCount === 0 &&
+        rootState.rootTextLength === 0 &&
+        rootState.bodyTextLength === 0
+      ) {
+        return {
+          details: "Vite React root stayed empty after browser render.",
+          ok: false,
+          reason: "blank_preview",
+        };
+      }
+
+      return { ok: true };
+    } finally {
+      await browser.close();
+    }
+  } catch (error) {
+    return {
+      details: error instanceof Error ? error.message : "Unable to run browser check.",
+      ok: false,
+      reason: "browser_check_failed",
+    };
+  }
+}
+
 async function syncPreviewHealth(session: E2BSandboxSession) {
   const processRunning = await isPreviewProcessRunning(session);
 
@@ -302,9 +503,18 @@ export async function recoverPreviewAfterEdit(session: E2BSandboxSession) {
     timeoutMs: EDIT_PREVIEW_TIMEOUT_MS,
     offlineMessage: "Preview unavailable after the change. Restart the preview.",
   });
+  if (fresh) {
+    const contentOk = await applyViteReactPreviewContentCheck(session);
+    appendLog(
+      session,
+      `Preview content check: ${contentOk ? "passed" : session.previewState}\n`,
+    );
+    return contentOk;
+  }
+
   appendLog(
     session,
-    `Edit freshness result: ${fresh ? "matched latest version" : session.previewState}\n`,
+    `Edit freshness result: ${session.previewState}\n`,
   );
-  return fresh;
+  return false;
 }

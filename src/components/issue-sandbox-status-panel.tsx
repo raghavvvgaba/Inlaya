@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  AlertTriangle,
+  Bug,
   ExternalLink,
   LoaderCircle,
   Play,
@@ -10,7 +12,14 @@ import {
 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import { ModeToggle } from "~/components/mode-toggle";
+import { sandboxSessionUpdatedEvent } from "~/lib/sandbox-events";
 import { cn } from "~/lib/utils";
 
 type SandboxStatus = "starting" | "installing" | "running" | "stopped" | "error";
@@ -29,6 +38,7 @@ type SandboxSession = {
   environmentId: string;
   logs: string[];
   message?: string;
+  previewError?: string;
   previewMessage?: string;
   previewState: PreviewState;
   previewUrl: string;
@@ -56,6 +66,7 @@ type SavedSandboxSession = {
 };
 
 type IssueSandboxStatusPanelProps = {
+  checkPreviewAction: string;
   heartbeatAction: string;
   onPreviewUrlChange?: (previewUrl: string | null) => void;
   projectId: string;
@@ -129,6 +140,7 @@ async function readSandboxResponse(response: Response) {
 }
 
 export function IssueSandboxStatusPanel({
+  checkPreviewAction,
   heartbeatAction,
   onPreviewUrlChange,
   projectId,
@@ -141,6 +153,7 @@ export function IssueSandboxStatusPanel({
   const [session, setSession] = useState<SandboxSession | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
+  const [isCheckingPreview, setIsCheckingPreview] = useState(false);
   const [isRestarting, setIsRestarting] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const isActive = session ? ACTIVE_STATUSES.has(session.status) : false;
@@ -151,7 +164,7 @@ export function IssueSandboxStatusPanel({
   const statusMessage =
     session?.status === "stopped" || session?.status === "error"
       ? session.message ?? session.startupMessage
-      : session?.startupMessage ?? session?.previewMessage ?? session?.message;
+      : session?.previewMessage ?? session?.startupMessage ?? session?.message;
   const displayMessage =
     statusMessage ?? "Start a preview environment for this issue.";
 
@@ -316,6 +329,39 @@ export function IssueSandboxStatusPanel({
     };
   }, [heartbeatAction, isActive, saveSession, session]);
 
+  useEffect(() => {
+    function handleSandboxSessionUpdated(event: Event) {
+      const customEvent = event as CustomEvent<{
+        projectId?: string;
+        sessionId?: string;
+      }>;
+
+      if (customEvent.detail?.projectId !== projectId) {
+        return;
+      }
+
+      const sessionId = customEvent.detail.sessionId ?? session?.sessionId;
+      if (!sessionId) {
+        void loadCurrentProjectSession().catch((loadError) => {
+          setError(getErrorMessage(loadError));
+        });
+        return;
+      }
+
+      void refreshSession(sessionId).catch((refreshError) => {
+        setError(getErrorMessage(refreshError));
+      });
+    }
+
+    window.addEventListener(sandboxSessionUpdatedEvent, handleSandboxSessionUpdated);
+    return () => {
+      window.removeEventListener(
+        sandboxSessionUpdatedEvent,
+        handleSandboxSessionUpdated,
+      );
+    };
+  }, [loadCurrentProjectSession, projectId, refreshSession, session?.sessionId]);
+
   async function handleStart() {
     if (isStarting) return;
 
@@ -359,6 +405,30 @@ export function IssueSandboxStatusPanel({
       setError(getErrorMessage(restartError));
     } finally {
       setIsRestarting(false);
+    }
+  }
+
+  async function handleCheckPreview() {
+    if (!session || isCheckingPreview) return;
+
+    setError(null);
+    setIsCheckingPreview(true);
+
+    try {
+      const response = await fetch(checkPreviewAction, {
+        body: JSON.stringify({ sessionId: session.sessionId }),
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      });
+      const nextSession = await readSandboxResponse(response);
+      saveSession(nextSession);
+    } catch (checkError) {
+      setError(getErrorMessage(checkError));
+    } finally {
+      setIsCheckingPreview(false);
     }
   }
 
@@ -426,6 +496,33 @@ export function IssueSandboxStatusPanel({
 
       {/* Right side: Controls */}
       <div className="flex shrink-0 items-center gap-2">
+        {session?.previewError ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                className="h-8 rounded-none border-destructive/40 px-2 text-xs text-destructive"
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                <AlertTriangle className="mr-1.5 h-3.5 w-3.5" />
+                Error
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className="w-[360px] rounded-none border-border p-0"
+            >
+              <DropdownMenuLabel className="border-b border-border px-3 py-2 text-[10px] font-bold uppercase tracking-widest">
+                Preview Error
+              </DropdownMenuLabel>
+              <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-[11px] leading-relaxed text-destructive">
+                {session.previewError}
+              </pre>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
+
         {canStart ? (
           <Button
             className="h-8 rounded-none text-xs"
@@ -454,6 +551,24 @@ export function IssueSandboxStatusPanel({
               <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
               Preview
             </a>
+          </Button>
+        ) : null}
+
+        {session && session.status === "running" ? (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 rounded-none text-xs"
+            disabled={isCheckingPreview || isRestarting || isStopping}
+            onClick={handleCheckPreview}
+            type="button"
+          >
+            {isCheckingPreview ? (
+              <LoaderCircle className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Bug className="mr-1.5 h-3.5 w-3.5" />
+            )}
+            {isCheckingPreview ? "Checking" : "Check"}
           </Button>
         ) : null}
 

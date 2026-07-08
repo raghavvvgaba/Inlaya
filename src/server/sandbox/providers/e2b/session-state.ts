@@ -88,6 +88,7 @@ export function publicSession(session: E2BSandboxSession): PublicSandboxSession 
       ? Math.max(0, new Date(session.endAt).getTime() - Date.now())
       : undefined,
     previewState: session.previewState,
+    previewError: session.previewError,
     previewMessage: session.previewMessage,
     previewVersion: session.previewVersion,
     previewObservedVersion: session.previewObservedVersion,
@@ -151,6 +152,7 @@ export function stoppedSession(
     endAt: undefined,
     remainingMs: undefined,
     previewState: "offline" as const,
+    previewError: undefined,
     previewMessage: undefined,
     previewVersion: undefined,
     previewObservedVersion: undefined,
@@ -166,6 +168,13 @@ export function setPreviewState(
 ) {
   session.previewState = state;
   session.previewMessage = message;
+}
+
+export function setPreviewError(
+  session: E2BSandboxSession,
+  error?: string,
+) {
+  session.previewError = error ? redactSessionText(session, error) : undefined;
 }
 
 export function setStartupStage(

@@ -51,6 +51,7 @@ export type E2BSandboxSession = {
   endAt?: string;
   remainingMs?: number;
   previewState: PreviewState;
+  previewError?: string;
   previewMessage?: string;
   previewVersion?: string;
   previewObservedVersion?: string;

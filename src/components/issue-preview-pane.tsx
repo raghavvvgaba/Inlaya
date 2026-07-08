@@ -4,17 +4,20 @@ import { useCallback, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
+  Copy,
   ExternalLink,
   Globe,
   Monitor,
   RefreshCw,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { IssueSandboxStatusPanel } from "~/components/issue-sandbox-status-panel";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 
 type IssuePreviewPaneProps = {
+  checkPreviewAction: string;
   heartbeatAction: string;
   projectId: string;
   restartPreviewAction: string;
@@ -24,6 +27,7 @@ type IssuePreviewPaneProps = {
 };
 
 export function IssuePreviewPane({
+  checkPreviewAction,
   heartbeatAction,
   projectId,
   restartPreviewAction,
@@ -42,11 +46,23 @@ export function IssuePreviewPane({
     setIframeKey((k) => k + 1);
   }
 
+  async function handleCopyPreviewLink() {
+    if (!previewUrl) return;
+
+    try {
+      await navigator.clipboard.writeText(previewUrl);
+      toast.success("Preview link copied.");
+    } catch {
+      toast.error("Could not copy preview link.");
+    }
+  }
+
   return (
     <div className="flex min-w-0 flex-1 flex-col bg-muted/20">
       {/* Status Panel Header */}
       <header className="flex h-14 shrink-0 items-center border-b border-border bg-background px-4">
         <IssueSandboxStatusPanel
+          checkPreviewAction={checkPreviewAction}
           heartbeatAction={heartbeatAction}
           onPreviewUrlChange={handlePreviewUrlChange}
           projectId={projectId}
@@ -100,6 +116,18 @@ export function IssuePreviewPane({
                 {previewUrl}
               </span>
             </div>
+
+            {/* Copy preview URL */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+              onClick={handleCopyPreviewLink}
+              type="button"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              <span className="sr-only">Copy preview link</span>
+            </Button>
 
             {/* Open in new tab */}
             <Button

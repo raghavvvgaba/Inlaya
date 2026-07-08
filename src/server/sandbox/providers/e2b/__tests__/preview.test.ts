@@ -1,0 +1,259 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { E2BSandboxSession } from "../types";
+
+const { verifySandboxHealthMock } = vi.hoisted(() => ({
+  verifySandboxHealthMock: vi.fn(),
+}));
+
+const {
+  browserCloseMock,
+  browserNewPageMock,
+  chromiumLaunchMock,
+  pageEvaluateMock,
+  pageGotoMock,
+  pageOnMock,
+  pageWaitForTimeoutMock,
+  playwrightEvents,
+} = vi.hoisted(() => ({
+  browserCloseMock: vi.fn(),
+  browserNewPageMock: vi.fn(),
+  chromiumLaunchMock: vi.fn(),
+  pageEvaluateMock: vi.fn(),
+  pageGotoMock: vi.fn(),
+  pageOnMock: vi.fn(),
+  pageWaitForTimeoutMock: vi.fn(),
+  playwrightEvents: {} as Record<string, (...args: unknown[]) => void>,
+}));
+
+vi.mock("~/server/sandbox/providers/e2b/sandbox-ops", () => ({
+  verifySandboxHealth: verifySandboxHealthMock,
+}));
+
+vi.mock("playwright", () => ({
+  chromium: {
+    launch: chromiumLaunchMock,
+  },
+}));
+
+import {
+  checkViteReactPreviewHtml,
+  recoverPreviewAfterEdit,
+} from "../preview";
+
+function createSession(): E2BSandboxSession {
+  return {
+    logs: [],
+    previewCwd: "/home/user/repo",
+    previewCommand: "npm run dev -- --host 0.0.0.0 --port 5173",
+    previewProcessId: 123,
+    previewState: "ready",
+    previewUrl: "https://preview.test",
+    sandbox: {
+      commands: {
+        list: vi.fn().mockResolvedValue([{ pid: 123 }]),
+      },
+    },
+    sandboxId: "sandbox-test",
+    sessionId: "session-test",
+    status: "running",
+  } as unknown as E2BSandboxSession;
+}
+
+function response(body: string, init?: ResponseInit) {
+  return new Response(body, {
+    status: 200,
+    ...init,
+  });
+}
+
+beforeEach(() => {
+  verifySandboxHealthMock.mockReset();
+  browserCloseMock.mockReset();
+  browserNewPageMock.mockReset();
+  chromiumLaunchMock.mockReset();
+  pageEvaluateMock.mockReset();
+  pageGotoMock.mockReset();
+  pageOnMock.mockReset();
+  pageWaitForTimeoutMock.mockReset();
+  for (const key of Object.keys(playwrightEvents)) {
+    delete playwrightEvents[key];
+  }
+  vi.unstubAllGlobals();
+
+  pageOnMock.mockImplementation((event: string, handler: (...args: unknown[]) => void) => {
+    playwrightEvents[event] = handler;
+  });
+  pageEvaluateMock.mockResolvedValue({
+    bodyTextLength: 12,
+    hasRoot: true,
+    rootChildCount: 1,
+    rootTextLength: 12,
+  });
+  pageGotoMock.mockResolvedValue(undefined);
+  pageWaitForTimeoutMock.mockResolvedValue(undefined);
+  browserNewPageMock.mockResolvedValue({
+    evaluate: pageEvaluateMock,
+    goto: pageGotoMock,
+    on: pageOnMock,
+    waitForTimeout: pageWaitForTimeoutMock,
+  });
+  browserCloseMock.mockResolvedValue(undefined);
+  chromiumLaunchMock.mockResolvedValue({
+    close: browserCloseMock,
+    newPage: browserNewPageMock,
+  });
+});
+
+describe("checkViteReactPreviewHtml", () => {
+  it("passes normal Vite React HTML", () => {
+    expect(
+      checkViteReactPreviewHtml(`<!doctype html>
+        <html>
+          <head><title>Vite App</title></head>
+          <body>
+            <div id="root"></div>
+            <script type="module" src="/src/main.jsx"></script>
+          </body>
+        </html>`),
+    ).toEqual({ ok: true });
+  });
+
+  it("fails on vite-error-overlay", () => {
+    expect(
+      checkViteReactPreviewHtml(`
+        <html>
+          <body>
+            <vite-error-overlay message="Failed to resolve import"></vite-error-overlay>
+          </body>
+        </html>`),
+    ).toMatchObject({
+      marker: "vite-error-overlay",
+      ok: false,
+      reason: "runtime_error_marker",
+    });
+  });
+
+  it("fails on Vite import and internal server error text", () => {
+    expect(
+      checkViteReactPreviewHtml(`
+        <html>
+          <body>
+            <pre>[vite] Internal server error: Failed to resolve import "./Missing"</pre>
+          </body>
+        </html>`),
+    ).toMatchObject({
+      marker: "[vite] Internal server error",
+      ok: false,
+      reason: "runtime_error_marker",
+    });
+  });
+
+  it("fails on common JavaScript runtime markers", () => {
+    expect(
+      checkViteReactPreviewHtml(`
+        <html>
+          <body>
+            <pre>ReferenceError: Button is not defined</pre>
+          </body>
+        </html>`),
+    ).toMatchObject({
+      marker: "ReferenceError:",
+      ok: false,
+      reason: "runtime_error_marker",
+    });
+
+    expect(
+      checkViteReactPreviewHtml(`
+        <html>
+          <body>
+            <pre>TypeError: Cannot read properties of undefined</pre>
+          </body>
+        </html>`),
+    ).toMatchObject({
+      marker: "TypeError:",
+      ok: false,
+      reason: "runtime_error_marker",
+    });
+  });
+
+  it("fails on empty or near-empty preview HTML", () => {
+    expect(checkViteReactPreviewHtml("")).toMatchObject({
+      ok: false,
+      reason: "empty_preview",
+    });
+
+    expect(
+      checkViteReactPreviewHtml("<html><body></body></html>"),
+    ).toMatchObject({
+      ok: false,
+      reason: "empty_preview",
+    });
+  });
+});
+
+describe("recoverPreviewAfterEdit", () => {
+  it("stores a diagnostic error when the Vite content check finds an error marker", async () => {
+    const session = createSession();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(response("ok"))
+      .mockResolvedValueOnce(response("ok"))
+      .mockResolvedValueOnce(response("", { status: 404 }))
+      .mockResolvedValueOnce(
+        response(`
+          <html>
+            <body>
+              <vite-error-overlay message="ReferenceError: Missing is not defined"></vite-error-overlay>
+            </body>
+          </html>`),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(recoverPreviewAfterEdit(session)).resolves.toBe(false);
+
+    expect(session.previewState).toBe("ready");
+    expect(session.previewMessage).toBe("Preview ready.");
+    expect(session.previewError).toContain("vite-error-overlay");
+    expect(session.logs.join("")).toContain("Preview check failed:");
+  });
+
+  it("stores a diagnostic error when the browser console reports a Vite React runtime error", async () => {
+    const session = createSession();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(response("ok"))
+      .mockResolvedValueOnce(response("ok"))
+      .mockResolvedValueOnce(response("", { status: 404 }))
+      .mockResolvedValueOnce(
+        response(`<!doctype html>
+          <html>
+            <body>
+              <div id="root"></div>
+              <script type="module" src="/src/main.jsx"></script>
+            </body>
+          </html>`),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    pageWaitForTimeoutMock.mockImplementation(async () => {
+      playwrightEvents.console?.([
+        {
+          text: () => "ReferenceError: Button is not defined",
+          type: () => "error",
+        },
+      ][0]);
+    });
+
+    await expect(recoverPreviewAfterEdit(session)).resolves.toBe(false);
+
+    expect(pageGotoMock).toHaveBeenCalledWith("https://preview.test", {
+      timeout: 8_000,
+      waitUntil: "domcontentloaded",
+    });
+    expect(browserCloseMock).toHaveBeenCalled();
+    expect(session.previewState).toBe("ready");
+    expect(session.previewMessage).toBe("Preview ready.");
+    expect(session.previewError).toBe("ReferenceError: Button is not defined");
+    expect(session.logs.join("")).toContain("ReferenceError: Button is not defined");
+  });
+});

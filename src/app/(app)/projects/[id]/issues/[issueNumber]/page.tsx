@@ -96,6 +96,7 @@ export default async function ProjectIssuePage({
     >
       {/* Right Pane - Preview */}
       <IssuePreviewPane
+        checkPreviewAction={`${sandboxBaseAction}/check-preview`}
         heartbeatAction={`${sandboxBaseAction}/heartbeat`}
         projectId={project.id}
         restartPreviewAction={`${sandboxBaseAction}/restart-preview`}

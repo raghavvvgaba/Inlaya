@@ -22,6 +22,7 @@ import {
 } from "~/server/sandbox/providers/e2b/constants";
 import { detectRepoPreviewConfig } from "~/server/sandbox/providers/e2b/repo-detect";
 import {
+  checkPreviewContentForDiagnostics,
   ensurePreviewServer,
   restartPreviewServer,
   startPreviewServer,
@@ -645,10 +646,38 @@ export async function restartSandboxPreview(sessionId: string) {
   return publicSession(session);
 }
 
+export async function checkSandboxPreview(sessionId: string) {
+  let session = getTrackedSession(sessionId);
+
+  if (!session) {
+    const restored = await restoreActiveSandboxSession(sessionId);
+
+    if (!restored || restored.status === "stopped") {
+      throw new Error("Session not found.");
+    }
+
+    session = getTrackedSession(sessionId);
+  }
+
+  if (!session?.sandbox) throw new Error("Session not found.");
+  if (session.status !== "running") throw new Error("Sandbox is not running.");
+
+  const heartbeat = recordSessionHeartbeat(sessionId);
+  if (heartbeat?.lastHeartbeatAt) {
+    await touchSandboxSessionHeartbeat(
+      heartbeat.sessionId,
+      new Date(heartbeat.lastHeartbeatAt),
+    );
+  }
+
+  return checkPreviewContentForDiagnostics(session);
+}
+
 export const lifecycleProviderMethods: Pick<
   SandboxProvider,
-  "get" | "heartbeat" | "restartPreview" | "start" | "stop"
+  "checkPreview" | "get" | "heartbeat" | "restartPreview" | "start" | "stop"
 > = {
+  checkPreview: checkSandboxPreview,
   get: getSandboxSession,
   heartbeat: heartbeatSandboxSession,
   restartPreview: restartSandboxPreview,

@@ -25,6 +25,7 @@ export type SandboxSession = {
   endAt?: string;
   remainingMs?: number;
   previewState: PreviewState;
+  previewError?: string;
   previewMessage?: string;
   previewVersion?: string;
   previewObservedVersion?: string;
@@ -206,5 +207,6 @@ export type SandboxProvider = {
   readRawFile: (input: SandboxRawFileInput) => Promise<SandboxRawFile>;
   start: (input: StartSandboxSessionInput) => Promise<SandboxSession>;
   stop: (input: StopSandboxSessionInput) => Promise<SandboxSession>;
+  checkPreview: (sessionId: string) => Promise<SandboxSession>;
   writeRawFile: (input: SandboxRawWriteFileInput) => Promise<{ path: string; session: SandboxSession }>;
 };
