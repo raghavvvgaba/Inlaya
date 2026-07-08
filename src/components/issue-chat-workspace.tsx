@@ -2,12 +2,27 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { ExternalLink, GitPullRequest, LoaderCircle, PanelLeftClose } from "lucide-react";
+import {
+  ExternalLink,
+  GitPullRequest,
+  LoaderCircle,
+  PanelLeftClose,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { AIChat, type AIChatMessage } from "~/components/ui/ai-chat";
 import { Button } from "~/components/ui/button";
 import { ChatInputBox } from "~/components/ui/chat-input-box";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog";
 import { useSidebar } from "~/components/issue-workspace-layout";
 import { buildIssueChatRuntimeMessage } from "~/lib/issue-chat-messages";
 import { sandboxSessionUpdatedEvent } from "~/lib/sandbox-events";
@@ -15,6 +30,7 @@ import { sandboxSessionUpdatedEvent } from "~/lib/sandbox-events";
 type IssueChatWorkspaceProps = {
   accessBlocked: boolean;
   agentAction: string;
+  clearChatAction: string;
   initialInstruction: string;
   initialMessages: AIChatMessage[];
   issueNumber: number;
@@ -67,6 +83,7 @@ type SandboxSessionResponse =
 export function IssueChatWorkspace({
   accessBlocked,
   agentAction,
+  clearChatAction,
   initialInstruction,
   initialMessages,
   issueNumber,
@@ -79,6 +96,8 @@ export function IssueChatWorkspace({
   const [messages, setMessages] = useState(initialMessages);
   const [instruction, setInstruction] = useState(initialInstruction);
   const [isRunning, setIsRunning] = useState(false);
+  const [isClearingChat, setIsClearingChat] = useState(false);
+  const [isClearChatDialogOpen, setIsClearChatDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(null);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
@@ -100,6 +119,13 @@ export function IssueChatWorkspace({
     () => `devin:sandbox:${projectId}`,
     [projectId],
   );
+  const hasVisibleMessages = messages.some((message) => !message.isThinking);
+  const canClearChat =
+    !accessBlocked &&
+    !isClearingChat &&
+    !isRunning &&
+    !isSubmitting &&
+    hasVisibleMessages;
 
   function getSandboxSessionId() {
     try {
@@ -313,6 +339,36 @@ export function IssueChatWorkspace({
     }
   }
 
+  async function handleClearChat() {
+    if (!canClearChat) {
+      return;
+    }
+
+    setIsClearingChat(true);
+
+    try {
+      const response = await fetch(clearChatAction, {
+        headers: {
+          Accept: "application/json",
+        },
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        toast.error("Chat history could not be cleared.");
+        return;
+      }
+
+      setMessages([]);
+      setIsClearChatDialogOpen(false);
+      toast.success("Chat history cleared.");
+    } catch {
+      toast.error("Chat history could not be cleared.");
+    } finally {
+      setIsClearingChat(false);
+    }
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {issueTitle ? (
@@ -331,6 +387,63 @@ export function IssueChatWorkspace({
             </h1>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            <Dialog
+              open={isClearChatDialogOpen}
+              onOpenChange={setIsClearChatDialogOpen}
+            >
+              <Button
+                className="h-6 rounded-none px-2 text-[10px] font-medium"
+                disabled={!canClearChat}
+                onClick={() => setIsClearChatDialogOpen(true)}
+                type="button"
+                variant="destructive"
+              >
+                {isClearingChat ? (
+                  <LoaderCircle className="mr-1 h-3 w-3 animate-spin" />
+                ) : (
+                  <Trash2 className="mr-1 h-3 w-3" />
+                )}
+                Clear chat
+              </Button>
+              <DialogContent
+                className="rounded-none border-border"
+                showCloseButton={false}
+              >
+                <DialogHeader>
+                  <DialogTitle>Clear issue chat?</DialogTitle>
+                  <DialogDescription>
+                    This removes the saved chat history for issue #{issueNumber}.
+                    It will not affect the sandbox, preview, or pull request state.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <DialogClose asChild>
+                    <Button
+                      className="rounded-none"
+                      disabled={isClearingChat}
+                      type="button"
+                      variant="outline"
+                    >
+                      Cancel
+                    </Button>
+                  </DialogClose>
+                  <Button
+                    className="rounded-none"
+                    disabled={isClearingChat}
+                    onClick={handleClearChat}
+                    type="button"
+                    variant="destructive"
+                  >
+                    {isClearingChat ? (
+                      <LoaderCircle className="mr-1 h-3 w-3 animate-spin" />
+                    ) : (
+                      <Trash2 className="mr-1 h-3 w-3" />
+                    )}
+                    Clear chat
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
             {pullRequestUrl ? (
               <Button
                 asChild

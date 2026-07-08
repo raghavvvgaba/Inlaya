@@ -44,6 +44,7 @@ export default async function ProjectIssuePage({
   } = issueWorkspaceData;
   const sandboxBaseAction = `/api/projects/${project.id}/issues/${issueNumber}/sandbox`;
   const agentAction = `${sandboxBaseAction}/agent`;
+  const clearChatAction = `/api/projects/${project.id}/issues/${issueNumber}/chat`;
   const submitAction = `${sandboxBaseAction}/submit`;
 
   return (
@@ -82,6 +83,7 @@ export default async function ProjectIssuePage({
             <IssueChatWorkspace
               accessBlocked={accessBlocked}
               agentAction={agentAction}
+              clearChatAction={clearChatAction}
               initialInstruction=""
               initialMessages={messages}
               issueNumber={issueNumber}

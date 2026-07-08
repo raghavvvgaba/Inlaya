@@ -61,6 +61,35 @@ export async function getIssueChatMessages(sessionId: string) {
   return messages.map(toPersistedChatMessage);
 }
 
+export async function clearIssueChatMessages(input: {
+  issueNumber: number;
+  projectId: string;
+}) {
+  const chatSession = await db.chatSession.findUnique({
+    select: {
+      id: true,
+    },
+    where: {
+      projectId_issueNumber: {
+        issueNumber: input.issueNumber,
+        projectId: input.projectId,
+      },
+    },
+  });
+
+  if (!chatSession) {
+    return { deletedCount: 0 };
+  }
+
+  const result = await db.chatMessage.deleteMany({
+    where: {
+      sessionId: chatSession.id,
+    },
+  });
+
+  return { deletedCount: result.count };
+}
+
 export async function appendIssueChatMessages(
   sessionId: string,
   messages: NewChatMessage[],
