@@ -496,7 +496,7 @@ export function IssueSandboxStatusPanel({
 
       {/* Right side: Controls */}
       <div className="flex shrink-0 items-center gap-2">
-        {session?.previewError ? (
+        {session?.status === "running" && session.previewError ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button

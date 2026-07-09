@@ -41,6 +41,7 @@ import {
   publicSession,
   recordSessionHeartbeat,
   scheduleAbandonmentCheck,
+  setPreviewError,
   setStartupStage,
   setTrackedSession,
   stoppedSession,
@@ -524,6 +525,7 @@ export async function cleanupSandboxSession(sandboxId: string) {
     if (session.sandboxId === sandboxId) {
       clearAbandonmentCheck(session);
       session.status = "stopped";
+      setPreviewError(session);
       appendLog(session, "Sandbox killed from cleanup panel.\n");
       deleteTrackedSession(sessionId);
       await markSandboxSessionStopped(sessionId);
@@ -583,6 +585,7 @@ export async function stopSandboxSession({
     session.status = "stopped";
     session.startupStage = undefined;
     session.startupMessage = undefined;
+    setPreviewError(session);
     session.sandbox = undefined;
     session.previewProcessId = undefined;
     appendLog(session, "Sandbox stopped.\n");
@@ -591,6 +594,7 @@ export async function stopSandboxSession({
   } catch (error) {
     if (isSandboxNotFoundError(error)) {
       session.status = "stopped";
+      setPreviewError(session);
       appendLog(session, "Sandbox was already gone.\n");
       await markSandboxSessionStopped(sessionId);
       deleteTrackedSession(sessionId);
