@@ -10,6 +10,11 @@ import type {
 } from "~/server/ai/types";
 import { aiProvider } from "~/server/ai/provider";
 import {
+  buildToolProgressMessage,
+  shouldShowModelProgressText,
+  type SandboxAgentProgressHandler,
+} from "~/server/sandbox/agent-progress";
+import {
   buildSandboxAgentModelTools,
 } from "~/server/sandbox/tools/model-tools";
 import {
@@ -150,6 +155,10 @@ type AgentToolBatchResult =
       status: "internal_fatal_failure";
       touchedPaths: string[];
     };
+
+type RunSandboxAgentOptions = {
+  onProgress?: SandboxAgentProgressHandler;
+};
 
 function hasToolMessageContent(
   result: AgentToolExecutionResult,
@@ -385,6 +394,45 @@ function parseToolCallArguments(toolCall: AIToolCall): Record<string, unknown> {
   } catch {
     return { _raw: toolCall.function.arguments };
   }
+}
+
+async function emitProgress(
+  onProgress: SandboxAgentProgressHandler | undefined,
+  message: string,
+) {
+  if (!message.trim()) {
+    return;
+  }
+
+  await onProgress?.({
+    message,
+    type: "progress",
+  });
+}
+
+async function emitModelProgress(
+  onProgress: SandboxAgentProgressHandler | undefined,
+  response: AIGenerateTextResult,
+) {
+  if (
+    response.toolCalls?.length &&
+    shouldShowModelProgressText(response.text)
+  ) {
+    await emitProgress(onProgress, response.text.trim());
+  }
+}
+
+async function emitToolProgress(
+  onProgress: SandboxAgentProgressHandler | undefined,
+  toolCall: AIToolCall,
+) {
+  await emitProgress(
+    onProgress,
+    buildToolProgressMessage(
+      toolCall.function.name,
+      parseToolCallArguments(toolCall),
+    ),
+  );
 }
 
 function buildRetryExhaustedResult(
@@ -940,12 +988,13 @@ async function finalizeWithFinishTurn(
   input: SandboxAgentInput,
   state: AgentRunState,
   finishPrompt: string,
+  options: RunSandboxAgentOptions = {},
   failureCode?: AgentFailureCode,
-  preferredDisplayMessage?: string,
 ) {
   let finishTurnResponse: AIGenerateTextResult;
 
   try {
+    await emitProgress(options.onProgress, "Finishing up...");
     finishTurnResponse = await callAgentFinishTurn(state, finishPrompt);
   } catch (error) {
     console.error("Sandbox agent finish turn failed:", error);
@@ -975,13 +1024,14 @@ async function finalizeWithFinishTurn(
   return buildAgentResult(input, state, {
     clarificationQuestion: finishResponse.clarificationQuestion,
     failureCode,
-    message: preferredDisplayMessage?.trim() || finishResponse.message,
+    message: finishResponse.message,
     status: failureCode ? "blocked" : finishResponse.status,
   });
 }
 
 export async function runSandboxAgent(
   input: SandboxAgentInput,
+  options: RunSandboxAgentOptions = {},
 ): Promise<SandboxAgentInternalResult> {
   console.log("Sandbox agent started:", {
     instructionPreview: previewText(input.userInstruction, 240),
@@ -1030,6 +1080,7 @@ export async function runSandboxAgent(
     state.stepsUsed += 1;
     state.usage = mergeUsage(state.usage, modelResponse.usage);
     logAgentModelResponse(input, "tool", state.stepsUsed, modelResponse);
+    await emitModelProgress(options.onProgress, modelResponse);
 
     const toolTurn = classifyToolTurn(modelResponse);
 
@@ -1078,13 +1129,14 @@ export async function runSandboxAgent(
         input,
         state,
         buildAgentFinishPrompt(),
+        options,
         undefined,
-        modelResponse.text,
       );
     }
 
     if (toolTurn.status === "single") {
       const toolCall = toolTurn.toolCalls[0];
+      await emitToolProgress(options.onProgress, toolCall);
       const toolResult = await executeToolCall(toolCall, input.sessionId);
       logAgentToolResult(input, state.stepsUsed, toolCall, toolResult);
 
@@ -1128,6 +1180,7 @@ export async function runSandboxAgent(
             input,
             state,
             buildTerminalFailureFinishPrompt(),
+            options,
             exhaustedFailure.code,
           );
         }
@@ -1148,10 +1201,11 @@ export async function runSandboxAgent(
       continue;
     }
 
-    const batchResult = await executeReadOnlyBatch(
-      toolTurn.toolCalls,
-      input.sessionId,
-    );
+    for (const toolCall of toolTurn.toolCalls) {
+      await emitToolProgress(options.onProgress, toolCall);
+    }
+
+    const batchResult = await executeReadOnlyBatch(toolTurn.toolCalls, input.sessionId);
 
     for (const executedTool of batchResult.executed) {
       logAgentToolResult(
@@ -1225,6 +1279,7 @@ export async function runSandboxAgent(
           input,
           state,
           buildTerminalFailureFinishPrompt(),
+          options,
           exhaustedFailure.code,
         );
       }

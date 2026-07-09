@@ -26,6 +26,7 @@ import {
 import { useSidebar } from "~/components/issue-workspace-layout";
 import { buildIssueChatRuntimeMessage } from "~/lib/issue-chat-messages";
 import { sandboxSessionUpdatedEvent } from "~/lib/sandbox-events";
+import { parseSseFrames } from "~/lib/sse";
 
 type IssueChatWorkspaceProps = {
   accessBlocked: boolean;
@@ -50,6 +51,20 @@ type AgentResponse =
   | {
       message?: string;
       status: "failed";
+    };
+
+type AgentStreamEvent =
+  | {
+      message: string;
+      type: "progress";
+    }
+  | {
+      result: AgentResponse;
+      type: "final";
+    }
+  | {
+      message: string;
+      type: "error";
     };
 
 type SubmitResponse =
@@ -80,6 +95,9 @@ type SandboxSessionResponse =
       ok: false;
     };
 
+const MAX_WORKING_UPDATES = 5;
+const workingMessageId = "working-message";
+
 export function IssueChatWorkspace({
   accessBlocked,
   agentAction,
@@ -103,17 +121,6 @@ export function IssueChatWorkspace({
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
   const [submitSessionId, setSubmitSessionId] = useState<string | null>(null);
   const { setIsOpen } = useSidebar();
-
-  const thinkingMessage = useMemo<AIChatMessage>(
-    () => ({
-      body: "Thinking",
-      id: "thinking-message",
-      isThinking: true,
-      role: "assistant",
-      tone: "default",
-    }),
-    [],
-  );
 
   const storageKey = useMemo(
     () => `devin:sandbox:${projectId}`,
@@ -158,6 +165,88 @@ export function IssueChatWorkspace({
           ? "success"
           : "warning",
     };
+  }
+
+  function buildWorkingMessage(updates: string[]): AIChatMessage {
+    return {
+      body: updates.join("\n"),
+      id: workingMessageId,
+      isThinking: true,
+      role: "assistant",
+      tone: "default",
+    };
+  }
+
+  function pushWorkingUpdate(message: string) {
+    const trimmedMessage = message.trim();
+
+    if (!trimmedMessage) {
+      return;
+    }
+
+    setMessages((current) => {
+      const existing = current.find((item) => item.id === workingMessageId);
+      const existingUpdates = existing?.body
+        ? existing.body.split("\n").filter(Boolean)
+        : [];
+      const nextUpdates = [...existingUpdates, trimmedMessage].slice(
+        -MAX_WORKING_UPDATES,
+      );
+      const nextWorkingMessage = buildWorkingMessage(nextUpdates);
+
+      if (!existing) {
+        return [...current, nextWorkingMessage];
+      }
+
+      return current.map((item) =>
+        item.id === workingMessageId ? nextWorkingMessage : item,
+      );
+    });
+  }
+
+  function removeWorkingMessage(messagesToFilter: AIChatMessage[]) {
+    return messagesToFilter.filter((message) => message.id !== workingMessageId);
+  }
+
+  async function readAgentStream(response: Response): Promise<AgentResponse> {
+    if (!response.body) {
+      throw new Error("The sandbox agent did not return a stream.");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+      const parsed = parseSseFrames(buffer);
+      buffer = parsed.remaining;
+
+      for (const event of parsed.events) {
+        const parsedEvent = JSON.parse(event.data) as AgentStreamEvent;
+
+        switch (parsedEvent.type) {
+          case "progress":
+            pushWorkingUpdate(parsedEvent.message);
+            break;
+          case "final":
+            return parsedEvent.result;
+          case "error":
+            return {
+              message: parsedEvent.message,
+              status: "failed",
+            };
+        }
+      }
+    }
+
+    throw new Error("The sandbox agent stream ended before a final response.");
   }
 
   async function refreshSubmitProgress(sessionId: string) {
@@ -211,7 +300,11 @@ export function IssueChatWorkspace({
     };
 
     setIsRunning(true);
-    setMessages((current) => [...current, userMessage, thinkingMessage]);
+    setMessages((current) => [
+      ...current,
+      userMessage,
+      buildWorkingMessage(["Starting workspace run..."]),
+    ]);
 
     try {
       const response = await fetch(agentAction, {
@@ -220,17 +313,20 @@ export function IssueChatWorkspace({
           sessionId,
         }),
         headers: {
-          Accept: "application/json",
+          Accept: "text/event-stream, application/json",
           "Content-Type": "application/json",
         },
         method: "POST",
       });
 
-      const result = (await response.json()) as AgentResponse;
+      const contentType = response.headers.get("Content-Type") ?? "";
+      const result = contentType.includes("text/event-stream")
+        ? await readAgentStream(response)
+        : ((await response.json()) as AgentResponse);
 
       if (!response.ok || result.status === "failed") {
         setMessages((current) => [
-          ...current.filter((message) => message.id !== thinkingMessage.id),
+          ...removeWorkingMessage(current),
           buildIssueChatRuntimeMessage("agent_run_failed", {
             fallbackBody:
               result.message ?? "The sandbox agent could not finish this request.",
@@ -246,9 +342,8 @@ export function IssueChatWorkspace({
           : [userMessage, buildFallbackAgentMessage(result)];
 
       setMessages((current) => [
-        ...current.filter(
-          (message) =>
-            message.id !== thinkingMessage.id && message.id !== userMessage.id,
+        ...removeWorkingMessage(current).filter(
+          (message) => message.id !== userMessage.id,
         ),
         ...nextMessages,
       ]);
@@ -257,10 +352,9 @@ export function IssueChatWorkspace({
           detail: { projectId, sessionId },
         }),
       );
-      router.refresh();
     } catch {
       setMessages((current) => [
-        ...current.filter((message) => message.id !== thinkingMessage.id),
+        ...removeWorkingMessage(current),
         buildIssueChatRuntimeMessage("agent_run_failed"),
       ]);
     } finally {
@@ -322,8 +416,6 @@ export function IssueChatWorkspace({
       } else {
         toast.success(result.message);
       }
-
-      router.refresh();
     } catch {
       const fallbackMessage = "The pull request could not be created.";
       setMessages((current) => [

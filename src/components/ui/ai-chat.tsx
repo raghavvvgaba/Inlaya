@@ -105,14 +105,19 @@ export function AIChat({
                     <div className="w-full min-w-0 space-y-1">
                       <div>
                         {message.isThinking ? (
-                          <span className="flex items-center gap-2">
-                            <span>{message.body}</span>
-                            <span className="flex items-center gap-1">
+                          <div className="space-y-1 text-xs leading-relaxed text-muted-foreground">
+                            {message.body.split("\n").filter(Boolean).map((line, index) => (
+                              <div key={`${index}-${line}`} className="flex items-center gap-2">
+                                <span className="h-1 w-1 shrink-0 rounded-none bg-current opacity-60" />
+                                <span>{line}</span>
+                              </div>
+                            ))}
+                            <span className="flex items-center gap-1 pt-1 text-foreground">
                               <span className="h-1.5 w-1.5 animate-bounce rounded-none bg-current [animation-delay:-0.2s]" />
                               <span className="h-1.5 w-1.5 animate-bounce rounded-none bg-current [animation-delay:-0.1s]" />
                               <span className="h-1.5 w-1.5 animate-bounce rounded-none bg-current" />
                             </span>
-                          </span>
+                          </div>
                         ) : (
                           <MarkdownMessageBody body={message.body} isUser={isUser} />
                         )}

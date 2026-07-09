@@ -286,6 +286,101 @@ beforeEach(() => {
 });
 
 describe("runSandboxAgent", () => {
+  it("emits progress for model text, tool calls, and finalization", async () => {
+    const progressMessages: string[] = [];
+
+    generateTextMock
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "I'll inspect the button component first.",
+          toolCalls: [
+            createToolCall("read_file", { path: "src/components/Button.tsx" }, "call-read"),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "I updated the button state.",
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: JSON.stringify({
+            message: "I updated the button state.",
+            status: "completed",
+          }),
+        }),
+      );
+
+    await runSandboxAgent(baseInput, {
+      onProgress(event) {
+        progressMessages.push(event.message);
+      },
+    });
+
+    expect(progressMessages).toEqual([
+      "I'll inspect the button component first.",
+      "Reading src/components/Button.tsx...",
+      "Finishing up...",
+    ]);
+  });
+
+  it("uses the structured finish message instead of raw no-tool prose with protocol JSON", async () => {
+    const rawNoToolResponse = [
+      "Based on the repository name, this appears to be a portfolio project.",
+      "",
+      "```json",
+      JSON.stringify(
+        {
+          clarificationQuestion:
+            "Would you like to explore the project files?",
+          message: "This is a personal portfolio project.",
+          status: "completed",
+        },
+        null,
+        2,
+      ),
+      "```",
+    ].join("\n");
+
+    generateTextMock
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: rawNoToolResponse,
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: JSON.stringify({
+            clarificationQuestion:
+              "Would you like to explore the project files?",
+            message:
+              "This is a personal portfolio project. No code changes were requested.",
+            status: "completed",
+          }),
+        }),
+      );
+
+    const result = await runSandboxAgent(baseInput);
+    const finalMessages = getFinalModelMessages();
+
+    expect(result).toMatchObject({
+      clarificationQuestion: "Would you like to explore the project files?",
+      message:
+        "This is a personal portfolio project. No code changes were requested.",
+      status: "completed",
+      stepsUsed: 2,
+    });
+    expect(finalMessages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          content: rawNoToolResponse,
+          role: "assistant",
+        }),
+      ]),
+    );
+  });
+
   it("accepts a valid two-call read-only batch and appends both tool results", async () => {
     generateTextMock
       .mockResolvedValueOnce(
@@ -318,7 +413,7 @@ describe("runSandboxAgent", () => {
 
     expect(result).toMatchObject({
       filesTouched: ["src/data/projects.js"],
-      message: "Done inspecting.",
+      message: "Inspected the relevant files.",
       status: "completed",
       stepsUsed: 3,
     });
@@ -380,7 +475,7 @@ describe("runSandboxAgent", () => {
 
     expect(result).toMatchObject({
       filesTouched: ["src/data/projects.js", "src/pages/ProjectsPage.jsx"],
-      message: "Done inspecting.",
+      message: "Checked the relevant files and search results.",
       status: "completed",
       stepsUsed: 3,
     });
@@ -544,7 +639,7 @@ describe("runSandboxAgent", () => {
 
     expect(result).toMatchObject({
       filesTouched: ["src/a.ts", "src/c.ts"],
-      message: "Done inspecting.",
+      message: "Finished inspecting despite one missing file.",
       status: "completed",
       stepsUsed: 3,
     });
@@ -612,7 +707,7 @@ describe("runSandboxAgent", () => {
 
     expect(result).toMatchObject({
       filesTouched: [],
-      message: "Done inspecting.",
+      message: "I narrowed the inspection after the timeout and continued.",
       status: "completed",
       stepsUsed: 4,
     });
@@ -686,7 +781,7 @@ describe("runSandboxAgent", () => {
 
     expect(result).toMatchObject({
       filesTouched: ["src/app/page.tsx"],
-      message: "Done inspecting.",
+      message: "I recovered from the timeout by narrowing the directory listing.",
       status: "completed",
       stepsUsed: 4,
     });
@@ -748,7 +843,7 @@ describe("runSandboxAgent", () => {
 
     expect(result).toMatchObject({
       filesTouched: ["src/b.ts"],
-      message: "Done inspecting.",
+      message: "I continued after the tool failure and inspected another file.",
       status: "completed",
       stepsUsed: 4,
     });
@@ -818,7 +913,7 @@ describe("runSandboxAgent", () => {
 
     expect(result).toMatchObject({
       filesTouched: ["src/a.ts", "src/c.ts"],
-      message: "Done inspecting.",
+      message: "I kept inspecting the remaining files after one tool failed.",
       status: "completed",
       stepsUsed: 3,
     });
@@ -978,7 +1073,7 @@ describe("runSandboxAgent", () => {
     expect(result).toMatchObject({
       diff: "diff --git a/src/data/projects.js b/src/data/projects.js",
       filesTouched: ["src/components/Hero.jsx"],
-      message: "Done. I updated the hero title.",
+      message: "Updated the hero title.",
       session: mockSession,
       status: "completed",
       stepsUsed: 3,
@@ -1112,7 +1207,7 @@ describe("runSandboxAgent", () => {
 
     expect(result).toMatchObject({
       filesTouched: ["src/components/Hero.jsx"],
-      message: "Done. I updated the hero title.",
+      message: "Updated the hero title after retrying the correct line.",
       status: "completed",
       stepsUsed: 4,
     });
@@ -1168,7 +1263,7 @@ describe("runSandboxAgent", () => {
     expect(result).toMatchObject({
       diff: "diff --git a/src/data/projects.js b/src/data/projects.js",
       filesTouched: ["src/data/projects.js"],
-      message: "Done. I updated the projects data.",
+      message: "Updated the projects data.",
       session: mockSession,
       status: "completed",
       stepsUsed: 3,
@@ -1184,7 +1279,7 @@ describe("runSandboxAgent", () => {
     );
   });
 
-  it("can finalize immediately when the first tool turn has no tool calls", async () => {
+  it("uses the structured finish message when the first tool turn has no tool calls", async () => {
     generateTextMock
       .mockResolvedValueOnce(
         createModelResponse({
@@ -1204,7 +1299,7 @@ describe("runSandboxAgent", () => {
 
     expect(result).toMatchObject({
       filesTouched: [],
-      message: "Nothing needed to change. The existing implementation already matches the request.",
+      message: "Schema finish message.",
       session: mockSession,
       status: "completed",
       stepsUsed: 2,
@@ -1215,7 +1310,7 @@ describe("runSandboxAgent", () => {
     });
   });
 
-  it("falls back to the finish-turn message when no-tool completion text is empty", async () => {
+  it("uses the finish-turn message when no-tool completion text is empty", async () => {
     generateTextMock
       .mockResolvedValueOnce(
         createModelResponse({
@@ -1240,7 +1335,7 @@ describe("runSandboxAgent", () => {
     });
   });
 
-  it("uses no-tool completion text while keeping blocked status and clarification from the finish turn", async () => {
+  it("uses structured blocked message and clarification from the finish turn", async () => {
     generateTextMock
       .mockResolvedValueOnce(
         createModelResponse({
@@ -1261,7 +1356,7 @@ describe("runSandboxAgent", () => {
 
     expect(result).toMatchObject({
       clarificationQuestion: "Which component should I update?",
-      message: "I need one more detail before changing code.",
+      message: "Schema blocked message.",
       status: "blocked",
       stepsUsed: 2,
     });
@@ -1310,7 +1405,7 @@ describe("runSandboxAgent", () => {
     const toolMessages = getToolMessages(finalMessages);
 
     expect(result).toMatchObject({
-      message: "Done inspecting.",
+      message: "I recovered by using an available tool.",
       status: "completed",
       stepsUsed: 4,
     });

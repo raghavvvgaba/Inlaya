@@ -7,6 +7,7 @@ import {
 import { revalidateProjectGitHubReads } from "~/server/github/cache";
 import { fetchProjectIssue } from "~/server/github/issues";
 import { runSandboxAgent } from "~/server/sandbox/agent";
+import { formatSseEvent } from "~/server/sandbox/agent-stream";
 import {
   getOwnedIssueProject,
   readJsonObject,
@@ -50,28 +51,7 @@ function mapIssueFailure(status: Awaited<ReturnType<typeof fetchProjectIssue>>["
   }
 }
 
-function mapAgentFailureStatusCode(result: Awaited<ReturnType<typeof runSandboxAgent>>) {
-  if (result.status !== "failed") {
-    return 200;
-  }
-
-  switch (result.failureCode) {
-    case "model_rate_limited":
-      return 429;
-    case "model_unavailable":
-      return 503;
-    case "sandbox_not_running":
-      return 409;
-    default:
-      return 500;
-  }
-}
-
 function buildAgentSummary(result: Awaited<ReturnType<typeof runSandboxAgent>>) {
-  const filesTouched =
-    result.filesTouched.length > 0
-      ? `Files touched: ${result.filesTouched.join(", ")}`
-      : "Files touched: none";
   const clarification = result.clarificationQuestion
     ? `\n\nClarification needed: ${result.clarificationQuestion}`
     : "";
@@ -79,7 +59,7 @@ function buildAgentSummary(result: Awaited<ReturnType<typeof runSandboxAgent>>) 
   switch (result.status) {
     case "completed":
       return {
-        body: `Sandbox agent completed.\n\n${result.message}\n\n${filesTouched}`,
+        body: result.message,
         tone: "success" as const,
       };
     case "blocked":
@@ -93,6 +73,60 @@ function buildAgentSummary(result: Awaited<ReturnType<typeof runSandboxAgent>>) 
         tone: "error" as const,
       };
   }
+}
+
+function createAgentStream() {
+  const encoder = new TextEncoder();
+  let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
+
+  const stream = new ReadableStream<Uint8Array>({
+    start(streamController) {
+      controller = streamController;
+    },
+  });
+
+  function send(event: Parameters<typeof formatSseEvent>[0]) {
+    controller?.enqueue(encoder.encode(formatSseEvent(event)));
+  }
+
+  function close() {
+    controller?.close();
+  }
+
+  return {
+    close,
+    send,
+    stream,
+  };
+}
+
+async function persistAgentChatMessages(input: {
+  issueNumber: number;
+  issueTitle: string;
+  projectId: string;
+  result: Awaited<ReturnType<typeof runSandboxAgent>>;
+  userId: string;
+  userInstruction: string;
+}) {
+  const chatSession = await getOrCreateIssueChatSession({
+    issueNumber: input.issueNumber,
+    projectId: input.projectId,
+    title: input.issueTitle,
+    userId: input.userId,
+  });
+  const summary = buildAgentSummary(input.result);
+
+  return appendIssueChatMessages(chatSession.id, [
+    {
+      body: input.userInstruction,
+      role: "user",
+    },
+    {
+      body: summary.body,
+      role: "assistant",
+      tone: summary.tone,
+    },
+  ]);
 }
 
 export async function POST(
@@ -141,64 +175,94 @@ export async function POST(
     return mapIssueFailure(issueResult.status);
   }
 
-  const result = await runSandboxAgent({
-    issueNumber: access.issueNumber,
-    issueTitle: issueResult.issue.title,
-    projectId: access.project.id,
-    repoName: access.project.repoName,
-    repoOwner: access.project.repoOwner,
-    sessionId,
-    userInstruction: instruction,
-  });
+  const agentStream = createAgentStream();
 
-  if (result.usage) {
-    console.log("Sandbox agent usage:", {
-      issueNumber: access.issueNumber,
-      projectId: access.project.id,
-      status: result.status,
-      usage: result.usage,
-    });
-  }
+  void (async () => {
+    try {
+      const result = await runSandboxAgent(
+        {
+          issueNumber: access.issueNumber,
+          issueTitle: issueResult.issue.title,
+          projectId: access.project.id,
+          repoName: access.project.repoName,
+          repoOwner: access.project.repoOwner,
+          sessionId,
+          userInstruction: instruction,
+        },
+        {
+          onProgress(event) {
+            agentStream.send(event);
+          },
+        },
+      );
 
-  let chatMessages: Awaited<ReturnType<typeof appendIssueChatMessages>> | undefined;
+      if (result.usage) {
+        console.log("Sandbox agent usage:", {
+          issueNumber: access.issueNumber,
+          projectId: access.project.id,
+          status: result.status,
+          usage: result.usage,
+        });
+      }
 
-  try {
-    const chatSession = await getOrCreateIssueChatSession({
-      issueNumber: access.issueNumber,
-      projectId: access.project.id,
-      title: issueResult.issue.title,
-      userId: access.userId,
-    });
-    const summary = buildAgentSummary(result);
+      let chatMessages:
+        | Awaited<ReturnType<typeof appendIssueChatMessages>>
+        | undefined;
 
-    chatMessages = await appendIssueChatMessages(chatSession.id, [
-      {
-        body: instruction,
-        role: "user",
-      },
-      {
-        body: summary.body,
-        role: "assistant",
-        tone: summary.tone,
-      },
-    ]);
-  } catch (error) {
-    console.error("Sandbox agent chat persistence failed:", error);
-  }
+      if (result.status !== "failed") {
+        try {
+          chatMessages = await persistAgentChatMessages({
+            issueNumber: access.issueNumber,
+            issueTitle: issueResult.issue.title,
+            projectId: access.project.id,
+            result,
+            userId: access.userId,
+            userInstruction: instruction,
+          });
+        } catch (error) {
+          console.error("Sandbox agent chat persistence failed:", error);
+        }
+      }
 
-  revalidateProjectGitHubReads({
-    issueNumber: access.issueNumber,
-    repoName: access.project.repoName,
-    repoOwner: access.project.repoOwner,
-  });
+      revalidateProjectGitHubReads({
+        issueNumber: access.issueNumber,
+        repoName: access.project.repoName,
+        repoOwner: access.project.repoOwner,
+      });
 
-  const { failureCode: _failureCode, ...publicResult } = result;
+      const { failureCode: _failureCode, ...publicResult } = result;
 
-  return NextResponse.json(
-    {
-      ...publicResult,
-      ...(chatMessages ? { messages: chatMessages } : {}),
+      if (result.status === "failed") {
+        agentStream.send({
+          message: result.message,
+          type: "error",
+        });
+        return;
+      }
+
+      agentStream.send({
+        result: {
+          ...publicResult,
+          ...(chatMessages ? { messages: chatMessages } : {}),
+        },
+        type: "final",
+      });
+    } catch (error) {
+      console.error("Sandbox agent stream failed:", error);
+      agentStream.send({
+        message: "The sandbox agent could not finish this request.",
+        type: "error",
+      });
+    } finally {
+      agentStream.close();
+    }
+  })();
+
+  return new Response(agentStream.stream, {
+    headers: {
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "Content-Type": "text/event-stream; charset=utf-8",
     },
-    { status: mapAgentFailureStatusCode(result) },
-  );
+  });
 }
