@@ -34,7 +34,7 @@ E2B_API_KEY=e2b_your_key pnpm build
 The build publishes this template name:
 
 ```txt
-devin-sandbox:rg
+gabatools/devin-sandbox
 ```
 
 ## Later App Usage
@@ -43,7 +43,7 @@ After the template is built and verified, the app can be updated in a later
 phase to create sandboxes with:
 
 ```env
-E2B_SANDBOX_TEMPLATE="devin-sandbox:rg"
+E2B_SANDBOX_TEMPLATE="gabatools/devin-sandbox"
 ```
 
 Do not install `ripgrep` during every sandbox startup. It should stay baked into

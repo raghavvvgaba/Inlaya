@@ -72,6 +72,7 @@ Server-side variables:
 - `OPENROUTER_API_KEY`
 - `OPENROUTER_MODEL`
 - `E2B_API_KEY`
+- `E2B_SANDBOX_TEMPLATE`
 
 Client-side variables:
 

@@ -18,6 +18,10 @@ export const env = createEnv({
     OPENROUTER_API_KEY: z.string().min(1).optional(),
     OPENROUTER_MODEL: z.string().min(1).optional(),
     E2B_API_KEY: z.string().min(1).optional(),
+    E2B_SANDBOX_TEMPLATE: z
+      .string()
+      .min(1)
+      .default("gabatools/devin-sandbox"),
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
@@ -51,6 +55,7 @@ export const env = createEnv({
     OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
     OPENROUTER_MODEL: process.env.OPENROUTER_MODEL,
     E2B_API_KEY: process.env.E2B_API_KEY,
+    E2B_SANDBOX_TEMPLATE: process.env.E2B_SANDBOX_TEMPLATE,
     NODE_ENV: process.env.NODE_ENV,
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:
       process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,

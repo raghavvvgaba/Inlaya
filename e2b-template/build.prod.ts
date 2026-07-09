@@ -4,12 +4,12 @@ import { Template, defaultBuildLogger } from "e2b";
 
 import { template } from "./template";
 
-const TEMPLATE_NAME = "devin-sandbox:rg";
+const TEMPLATE_NAME = "gabatools/devin-sandbox";
 
 async function main() {
   const build = await Template.build(template, TEMPLATE_NAME, {
-    cpuCount: 1,
-    memoryMB: 1024,
+    cpuCount: 2,
+    memoryMB: 512,
     onBuildLogs: defaultBuildLogger(),
   });
 

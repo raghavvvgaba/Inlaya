@@ -1,5 +1,6 @@
 import type { Sandbox as E2BSandbox, SandboxInfo } from "e2b";
 
+import { env } from "~/env";
 import { getRepoInstallationAccessToken } from "~/server/github/app-auth";
 import {
   createSandboxSessionRecord,
@@ -297,8 +298,11 @@ export async function createSandboxSession(input: StartSessionInput) {
     lastHeartbeatAt: new Date().toISOString(),
   };
 
-  appendLog(session, "Creating E2B sandbox...\n");
-  const sandbox = await Sandbox.create("base", {
+  appendLog(
+    session,
+    `Creating E2B sandbox from ${env.E2B_SANDBOX_TEMPLATE}...\n`,
+  );
+  const sandbox = await Sandbox.create(env.E2B_SANDBOX_TEMPLATE, {
     metadata: {
       app: SANDBOX_METADATA_APP,
       sessionId,
