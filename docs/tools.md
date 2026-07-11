@@ -4,6 +4,34 @@ Canonical developer-facing contracts for sandbox tools live here.
 
 This file is the current source of truth for tool behavior that the app and future agent layers should rely on.
 
+## `glob_files`
+
+Purpose: Find files inside the sandbox repo by path pattern.
+
+Input:
+- `sessionId: string`
+- `patterns: string[]`
+- `path?: string`
+
+Output:
+- `paths: string[]`
+- `truncated: boolean`
+- `cap: 100`
+
+Behavior:
+- patterns use ripgrep glob syntax
+- leading `!` patterns exclude matching files
+- paths are repository-relative and sorted
+- respects ignore files and skips generated/dependency directories
+- returns at most `100` paths
+- `truncated=true` means more matching paths may exist
+- caller should narrow the path or patterns and retry
+
+Example patterns:
+- `src/**/*.tsx`
+- `**/*.{ts,js}`
+- `!**/*.test.ts`
+
 ## `search_code`
 
 Purpose: Search code inside the sandbox repo.

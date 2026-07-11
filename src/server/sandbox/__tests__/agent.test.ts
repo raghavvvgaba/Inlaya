@@ -14,6 +14,7 @@ import AGENT_SYSTEM_PROMPT_TEMPLATE from "../prompts/agent-system.txt";
 const {
   generateTextMock,
   getSessionMock,
+  globToolExecuteMock,
   listToolExecuteMock,
   readToolExecuteMock,
   replaceToolExecuteMock,
@@ -25,6 +26,7 @@ const {
     (input: AIGenerateTextInput) => Promise<AIGenerateTextResult>
   >(),
   getSessionMock: vi.fn(),
+  globToolExecuteMock: vi.fn(),
   listToolExecuteMock: vi.fn(),
   readToolExecuteMock: vi.fn(),
   replaceToolExecuteMock: vi.fn(),
@@ -62,6 +64,7 @@ function buildToolDefinition(name: string, description: string) {
 
 vi.mock("~/server/sandbox/tools/model-tools", () => ({
   buildSandboxAgentModelTools: () => [
+    buildToolDefinition("glob_files", "Find files by glob pattern."),
     buildToolDefinition("list_directory", "List files in a directory."),
     buildToolDefinition("read_file", "Read a file from the sandbox."),
     buildToolDefinition("search_code", "Search code in the sandbox."),
@@ -89,6 +92,12 @@ function buildRegistryTool(
 vi.mock("~/server/sandbox/tools/registry", () => ({
   getSandboxAgentTool: (name: string) => {
     switch (name) {
+      case "glob_files":
+        return buildRegistryTool(
+          "glob_files",
+          "Find files by glob pattern.",
+          globToolExecuteMock,
+        );
       case "list_directory":
         return buildRegistryTool(
           "list_directory",
@@ -226,6 +235,7 @@ const expectedMultiToolRetryPrompt = formatPromptTemplate(
 beforeEach(() => {
   generateTextMock.mockReset();
   getSessionMock.mockReset();
+  globToolExecuteMock.mockReset();
   listToolExecuteMock.mockReset();
   readToolExecuteMock.mockReset();
   replaceToolExecuteMock.mockReset();
@@ -234,6 +244,11 @@ beforeEach(() => {
   writeToolExecuteMock.mockReset();
 
   getSessionMock.mockResolvedValue(mockSession);
+  globToolExecuteMock.mockResolvedValue({
+    cap: 100,
+    paths: ["src/app/page.tsx"],
+    truncated: false,
+  });
   runCommandMock.mockResolvedValue({
     command: "git diff -- .",
     exitCode: 0,
@@ -440,6 +455,54 @@ describe("runSandboxAgent", () => {
       content: expectedSystemPrompt,
       role: "system",
     });
+  });
+
+  it("accepts glob_files in a read-only batch", async () => {
+    generateTextMock
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "I'll find and inspect the page.",
+          toolCalls: [
+            createToolCall(
+              "glob_files",
+              { patterns: ["src/**/*.tsx", "!**/*.test.tsx"] },
+              "call-glob",
+            ),
+            createToolCall(
+              "read_file",
+              { path: "src/app/page.tsx" },
+              "call-read",
+            ),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(createModelResponse({ text: "Done inspecting." }))
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: JSON.stringify({
+            message: "Found and inspected the relevant page.",
+            status: "completed",
+          }),
+        }),
+      );
+
+    const result = await runSandboxAgent(baseInput);
+    const toolMessages = getToolMessages(getFinalModelMessages());
+
+    expect(result).toMatchObject({
+      message: "Found and inspected the relevant page.",
+      status: "completed",
+    });
+    expect(globToolExecuteMock).toHaveBeenCalledWith(
+      { patterns: ["src/**/*.tsx", "!**/*.test.tsx"] },
+      { sessionId: "session-test" },
+    );
+    expect(toolMessages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ tool_call_id: "call-glob" }),
+        expect.objectContaining({ tool_call_id: "call-read" }),
+      ]),
+    );
   });
 
   it("accepts up to five read-only tool calls in one turn", async () => {

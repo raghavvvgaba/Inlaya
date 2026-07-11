@@ -125,7 +125,7 @@ For the overall app structure, API layout, and sandbox lifecycle, see [docs/arch
 Canonical developer-facing tool contracts live in [docs/tools.md](docs/tools.md).
 
 - [docs/tools.md](docs/tools.md)
-  Canonical contracts for sandbox tools, including `search_code`.
+  Canonical contracts for sandbox tools, including `glob_files` and `search_code`.
 
 ## Troubleshooting
 

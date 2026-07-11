@@ -28,6 +28,7 @@ import type {
   SandboxAgentResult,
   SandboxFile,
   SandboxFileEntry,
+  SandboxGlobResult,
   SandboxSearchResult,
   SandboxSession,
 } from "~/server/sandbox/types";
@@ -48,6 +49,7 @@ const sandboxAgentToolIds = sandboxAgentModelTools.map(
   (tool) => tool.function.name,
 ) as SandboxAgentToolName[];
 const READ_ONLY_TOOL_NAMES = new Set<SandboxAgentToolName>([
+  "glob_files",
   "list_directory",
   "read_file",
   "search_code",
@@ -265,6 +267,16 @@ function formatSearchResult(result: SandboxSearchResult) {
       (match) =>
         `- ${match.path}:${match.line}:${match.column} ${match.text}`,
     ),
+    `truncated: ${result.truncated ? "true" : "false"}`,
+  ].join("\n");
+}
+
+function formatGlobResult(result: SandboxGlobResult) {
+  return [
+    result.paths.length === 0
+      ? "glob_files returned no paths."
+      : "glob_files paths:",
+    ...result.paths.map((path) => `- ${path}`),
     `truncated: ${result.truncated ? "true" : "false"}`,
   ].join("\n");
 }
@@ -688,6 +700,13 @@ async function executeToolCall(
     const toolMessageContent = JSON.stringify(result);
 
     switch (toolName) {
+      case "glob_files":
+        return {
+          latestObservation: formatGlobResult(result as SandboxGlobResult),
+          recentEvent: `Found files matching ${JSON.stringify(parsedArguments.patterns ?? [])}${typeof parsedArguments.path === "string" && parsedArguments.path ? ` in ${parsedArguments.path}` : ""}.`,
+          status: "ok",
+          toolMessageContent,
+        };
       case "list_directory":
         return {
           latestObservation: formatDirectoryEntries(result as SandboxFileEntry[]),

@@ -42,6 +42,8 @@ export function buildToolProgressMessage(
       : undefined;
 
   switch (toolName) {
+    case "glob_files":
+      return path ? `Finding files in ${path}...` : "Finding project files...";
     case "search_code":
       return "Searching the codebase...";
     case "list_directory":
@@ -55,4 +57,3 @@ export function buildToolProgressMessage(
       return "Working in the sandbox...";
   }
 }
-

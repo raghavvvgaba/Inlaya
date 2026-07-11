@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SandboxAgentToolDefinition } from "./types";
+import { globSandboxAgentTool } from "./glob-files";
 import { listSandboxAgentTool } from "./list-directory";
 import { readSandboxAgentTool } from "./read-file";
 import { replaceSandboxAgentTool } from "./replace-in-file";
@@ -8,6 +9,7 @@ import { searchSandboxAgentTool } from "./search-code";
 import { writeSandboxAgentTool } from "./write-file";
 
 export const sandboxAgentToolRegistry = [
+  globSandboxAgentTool,
   listSandboxAgentTool,
   readSandboxAgentTool,
   searchSandboxAgentTool,

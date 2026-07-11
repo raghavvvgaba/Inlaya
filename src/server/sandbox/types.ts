@@ -70,6 +70,18 @@ export type SandboxSearchInput = {
   sessionId: string;
 };
 
+export type SandboxGlobInput = {
+  path?: string;
+  patterns: string[];
+  sessionId: string;
+};
+
+export type SandboxGlobResult = {
+  cap: number;
+  paths: string[];
+  truncated: boolean;
+};
+
 export type SandboxCommandInput = {
   command: string;
   sessionId: string;

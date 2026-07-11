@@ -32,6 +32,9 @@ describe("shouldShowModelProgressText", () => {
 
 describe("buildToolProgressMessage", () => {
   it("maps tool calls to high-level progress copy", () => {
+    expect(buildToolProgressMessage("glob_files", { path: "src" })).toBe(
+      "Finding files in src...",
+    );
     expect(buildToolProgressMessage("search_code", { query: "Button" })).toBe(
       "Searching the codebase...",
     );
@@ -47,4 +50,3 @@ describe("buildToolProgressMessage", () => {
     expect(buildToolProgressMessage("write_file", {})).toBe("Editing a file...");
   });
 });
-

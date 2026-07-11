@@ -1,0 +1,7 @@
+Find repository files whose paths match glob patterns.
+
+Usage:
+- `patterns` is required and accepts include and `!` exclusion patterns.
+- `path` optionally limits discovery to a repository-relative directory.
+- Results are sorted, capped, and exclude ignored or generated files.
+- If results are truncated, narrow the path or patterns and try again.
