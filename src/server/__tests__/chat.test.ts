@@ -16,7 +16,47 @@ vi.mock("~/server/db", () => ({
   },
 }));
 
-const { clearIssueChatMessages } = await import("~/server/chat");
+const { clearIssueChatMessages, toSandboxAgentConversationHistory } =
+  await import("~/server/chat");
+
+describe("toSandboxAgentConversationHistory", () => {
+  it("keeps ordered user and assistant messages and excludes system messages", () => {
+    expect(
+      toSandboxAgentConversationHistory([
+        {
+          body: "Rename the profile card name to Dev.",
+          id: "message-1",
+          role: "user",
+        },
+        {
+          body: "Sandbox started.",
+          id: "message-2",
+          role: "system",
+          tone: "default",
+        },
+        {
+          body: "Switch to Build mode to apply the rename.",
+          id: "message-3",
+          role: "assistant",
+          tone: "warning",
+        },
+      ]),
+    ).toEqual([
+      {
+        content: "Rename the profile card name to Dev.",
+        role: "user",
+      },
+      {
+        content: "Switch to Build mode to apply the rename.",
+        role: "assistant",
+      },
+    ]);
+  });
+
+  it("returns an empty history after all chat messages are cleared", () => {
+    expect(toSandboxAgentConversationHistory([])).toEqual([]);
+  });
+});
 
 describe("clearIssueChatMessages", () => {
   beforeEach(() => {

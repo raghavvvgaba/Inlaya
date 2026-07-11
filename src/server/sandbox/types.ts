@@ -190,7 +190,13 @@ export type SandboxAgentStatus =
 
 export type SandboxAgentMode = "build" | "plan";
 
+export type SandboxAgentConversationMessage = {
+  content: string;
+  role: "assistant" | "user";
+};
+
 export type SandboxAgentInput = {
+  conversationHistory: SandboxAgentConversationMessage[];
   issueNumber: number;
   issueTitle: string;
   mode: SandboxAgentMode;

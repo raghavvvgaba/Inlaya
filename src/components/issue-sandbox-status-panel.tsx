@@ -71,7 +71,11 @@ type SavedSandboxSession = {
 type IssueSandboxStatusPanelProps = {
   checkPreviewAction: string;
   heartbeatAction: string;
-  onPreviewUrlChange?: (previewUrl: string | null) => void;
+  onPreviewStateChange?: (state: {
+    isPreparing: boolean;
+    message: string | null;
+    previewUrl: string | null;
+  }) => void;
   projectId: string;
   restartPreviewAction: string;
   sessionAction: string;
@@ -145,7 +149,7 @@ async function readSandboxResponse(response: Response) {
 export function IssueSandboxStatusPanel({
   checkPreviewAction,
   heartbeatAction,
-  onPreviewUrlChange,
+  onPreviewStateChange,
   projectId,
   restartPreviewAction,
   sessionAction,
@@ -171,17 +175,17 @@ export function IssueSandboxStatusPanel({
   const displayMessage =
     statusMessage ?? "Start a preview environment for this issue.";
 
-  // Keep the embedded browser available whenever the sandbox still owns a URL.
-  // Readiness controls status messaging, not whether the user can access it.
+  // The host exists before dependencies and the preview server are ready. Keep
+  // the embedded browser hidden during that first-time setup window.
   useEffect(() => {
-    if (onPreviewUrlChange) {
-      onPreviewUrlChange(
-        session?.previewUrl && session.status !== "stopped"
-          ? session.previewUrl
-          : null,
-      );
+    if (onPreviewStateChange) {
+      onPreviewStateChange({
+        isPreparing: Boolean(session && ACTIVE_STATUSES.has(session.status)),
+        message: session ? displayMessage : null,
+        previewUrl: canOpenPreview ? session?.previewUrl ?? null : null,
+      });
     }
-  }, [onPreviewUrlChange, session?.previewUrl, session?.status]);
+  }, [canOpenPreview, displayMessage, onPreviewStateChange, session]);
 
   const saveSession = useCallback(
     (nextSession: SandboxSession) => {

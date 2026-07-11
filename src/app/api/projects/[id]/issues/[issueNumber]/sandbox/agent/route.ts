@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 
 import {
   appendIssueChatMessages,
+  getIssueChatMessages,
   getOrCreateIssueChatSession,
+  toSandboxAgentConversationHistory,
 } from "~/server/chat";
 import { revalidateProjectGitHubReads } from "~/server/github/cache";
 import { fetchProjectIssue } from "~/server/github/issues";
@@ -102,22 +104,13 @@ function createAgentStream() {
 }
 
 async function persistAgentChatMessages(input: {
-  issueNumber: number;
-  issueTitle: string;
-  projectId: string;
+  chatSessionId: string;
   result: Awaited<ReturnType<typeof runSandboxAgent>>;
-  userId: string;
   userInstruction: string;
 }) {
-  const chatSession = await getOrCreateIssueChatSession({
-    issueNumber: input.issueNumber,
-    projectId: input.projectId,
-    title: input.issueTitle,
-    userId: input.userId,
-  });
   const summary = buildAgentSummary(input.result);
 
-  return appendIssueChatMessages(chatSession.id, [
+  return appendIssueChatMessages(input.chatSessionId, [
     {
       body: input.userInstruction,
       role: "user",
@@ -185,8 +178,18 @@ export async function POST(
 
   void (async () => {
     try {
+      const chatSession = await getOrCreateIssueChatSession({
+        issueNumber: access.issueNumber,
+        projectId: access.project.id,
+        title: issueResult.issue.title,
+        userId: access.userId,
+      });
+      const conversationHistory = toSandboxAgentConversationHistory(
+        await getIssueChatMessages(chatSession.id),
+      );
       const result = await runSandboxAgent(
         {
+          conversationHistory,
           issueNumber: access.issueNumber,
           issueTitle: issueResult.issue.title,
           mode,
@@ -220,11 +223,8 @@ export async function POST(
       if (result.status !== "failed") {
         try {
           chatMessages = await persistAgentChatMessages({
-            issueNumber: access.issueNumber,
-            issueTitle: issueResult.issue.title,
-            projectId: access.project.id,
+            chatSessionId: chatSession.id,
             result,
-            userId: access.userId,
             userInstruction: instruction,
           });
         } catch (error) {

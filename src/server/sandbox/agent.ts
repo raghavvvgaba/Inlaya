@@ -1142,6 +1142,7 @@ export async function runSandboxAgent(
         content: buildAgentSystemPrompt(input.mode),
         role: "system",
       },
+      ...input.conversationHistory,
       {
         content: buildAgentUserPrompt(input),
         role: "user",

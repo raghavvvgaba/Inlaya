@@ -146,6 +146,7 @@ const mockSession: SandboxSession = {
 };
 
 const baseInput: SandboxAgentInput = {
+  conversationHistory: [],
   issueNumber: 16,
   issueTitle: "Replace HealSync with Tessera",
   mode: "build",
@@ -309,6 +310,92 @@ beforeEach(() => {
 });
 
 describe("runSandboxAgent", () => {
+  it("places persisted conversation history before the current instruction", async () => {
+    generateTextMock
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "I can continue from the earlier request.",
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: JSON.stringify({
+            message: "I continued from the earlier request.",
+            status: "completed",
+          }),
+        }),
+      );
+
+    await runSandboxAgent({
+      ...baseInput,
+      conversationHistory: [
+        {
+          content: "Rename the profile card name to Dev.",
+          role: "user",
+        },
+        {
+          content: "Switch to Build mode to apply the rename.",
+          role: "assistant",
+        },
+      ],
+      userInstruction: "Implement the change I requested earlier.",
+    });
+
+    const messages = getModelCall(0)?.messages ?? [];
+
+    expect(messages[0]).toEqual({
+      content: expectedSystemPrompt,
+      role: "system",
+    });
+    expect(messages.slice(1, 3)).toEqual([
+      {
+        content: "Rename the profile card name to Dev.",
+        role: "user",
+      },
+      {
+        content: "Switch to Build mode to apply the rename.",
+        role: "assistant",
+      },
+    ]);
+    expect(messages[3]).toMatchObject({
+      role: "user",
+    });
+    expect(messages[3]?.content).toContain(
+      "Implement the change I requested earlier.",
+    );
+    expect(
+      messages.filter((message) =>
+        message.content.includes("Implement the change I requested earlier."),
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("keeps the existing single-turn transcript when history is empty", async () => {
+    generateTextMock
+      .mockResolvedValueOnce(createModelResponse({ text: "Done." }))
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: JSON.stringify({
+            message: "Done.",
+            status: "completed",
+          }),
+        }),
+      );
+
+    await runSandboxAgent(baseInput);
+
+    const messages = getModelCall(0)?.messages ?? [];
+
+    expect(messages[0]).toEqual({
+      content: expectedSystemPrompt,
+      role: "system",
+    });
+    expect(messages[1]).toMatchObject({
+      role: "user",
+    });
+    expect(messages[1]?.content).toContain(baseInput.userInstruction);
+  });
+
   it("emits progress for model text, tool calls, and finalization", async () => {
     const progressMessages: string[] = [];
 

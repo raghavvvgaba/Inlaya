@@ -9,6 +9,7 @@ import {
   Globe,
   Monitor,
   RefreshCw,
+  LoaderCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -36,10 +37,18 @@ export function IssuePreviewPane({
   stopAction,
 }: IssuePreviewPaneProps) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isPreparingPreview, setIsPreparingPreview] = useState(false);
+  const [previewStatusMessage, setPreviewStatusMessage] = useState<string | null>(null);
   const [iframeKey, setIframeKey] = useState(0);
 
-  const handlePreviewUrlChange = useCallback((url: string | null) => {
-    setPreviewUrl(url);
+  const handlePreviewStateChange = useCallback((state: {
+    isPreparing: boolean;
+    message: string | null;
+    previewUrl: string | null;
+  }) => {
+    setPreviewUrl(state.previewUrl);
+    setIsPreparingPreview(state.isPreparing);
+    setPreviewStatusMessage(state.message);
   }, []);
 
   function handleRefreshPreview() {
@@ -64,7 +73,7 @@ export function IssuePreviewPane({
         <IssueSandboxStatusPanel
           checkPreviewAction={checkPreviewAction}
           heartbeatAction={heartbeatAction}
-          onPreviewUrlChange={handlePreviewUrlChange}
+          onPreviewStateChange={handlePreviewStateChange}
           projectId={projectId}
           restartPreviewAction={restartPreviewAction}
           sessionAction={sessionAction}
@@ -153,6 +162,18 @@ export function IssuePreviewPane({
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
               allow="clipboard-read; clipboard-write"
             />
+          </div>
+        </div>
+      ) : isPreparingPreview ? (
+        <div className="flex flex-1 items-center justify-center">
+          <div className="flex flex-col items-center gap-3 text-center text-muted-foreground">
+            <LoaderCircle className="h-6 w-6 animate-spin" />
+            <div>
+              <p className="text-sm font-medium text-foreground">Sandbox is running</p>
+              <p className="mt-0.5 text-xs text-muted-foreground/70">
+                {previewStatusMessage ?? "Preparing the preview..."}
+              </p>
+            </div>
           </div>
         </div>
       ) : (

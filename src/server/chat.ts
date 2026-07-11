@@ -1,4 +1,5 @@
 import { db } from "~/server/db";
+import type { SandboxAgentConversationMessage } from "~/server/sandbox/types";
 
 type PersistedChatMessage = {
   body: string;
@@ -59,6 +60,21 @@ export async function getIssueChatMessages(sessionId: string) {
   });
 
   return messages.map(toPersistedChatMessage);
+}
+
+export function toSandboxAgentConversationHistory(
+  messages: PersistedChatMessage[],
+): SandboxAgentConversationMessage[] {
+  return messages.flatMap((message) =>
+    message.role === "assistant" || message.role === "user"
+      ? [
+          {
+            content: message.body,
+            role: message.role,
+          },
+        ]
+      : [],
+  );
 }
 
 export async function clearIssueChatMessages(input: {
