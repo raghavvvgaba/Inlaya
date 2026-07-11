@@ -7,6 +7,7 @@ import {
 import { revalidateProjectGitHubReads } from "~/server/github/cache";
 import { fetchProjectIssue } from "~/server/github/issues";
 import { runSandboxAgent } from "~/server/sandbox/agent";
+import { parseSandboxAgentMode } from "~/server/sandbox/agent-mode";
 import { formatSseEvent } from "~/server/sandbox/agent-stream";
 import {
   getOwnedIssueProject,
@@ -143,6 +144,11 @@ export async function POST(
   const body = await readJsonObject(request);
   const sessionId = readStringField(body, "sessionId");
   const instruction = readStringField(body, "instruction");
+  const mode = parseSandboxAgentMode(body?.mode);
+
+  if (!mode) {
+    return jsonFailure("Choose either Plan or Build mode.", 400);
+  }
 
   if (!sessionId) {
     return jsonFailure("Start the sandbox first so Devin has a live workspace.", 400);
@@ -183,6 +189,7 @@ export async function POST(
         {
           issueNumber: access.issueNumber,
           issueTitle: issueResult.issue.title,
+          mode,
           projectId: access.project.id,
           repoName: access.project.repoName,
           repoOwner: access.project.repoOwner,
@@ -199,6 +206,7 @@ export async function POST(
       if (result.usage) {
         console.log("Sandbox agent usage:", {
           issueNumber: access.issueNumber,
+          mode,
           projectId: access.project.id,
           status: result.status,
           usage: result.usage,

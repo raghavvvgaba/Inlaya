@@ -1,4 +1,5 @@
 Do not call any tools.
+{{MODE_FINISH_INSTRUCTION}}
 Return the final result as JSON only.
 Use this shape: {"status":"completed"|"blocked","message":"...","clarificationQuestion":"optional"}
 Do not include markdown fences or any extra prose.

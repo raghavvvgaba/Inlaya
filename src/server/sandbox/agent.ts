@@ -25,6 +25,7 @@ import { sandboxProvider } from "~/server/sandbox/provider";
 import { getSandboxDiff } from "~/server/sandbox/tools/diff";
 import type {
   SandboxAgentInput,
+  SandboxAgentMode,
   SandboxAgentResult,
   SandboxFile,
   SandboxFileEntry,
@@ -40,6 +41,7 @@ import AGENT_TERMINAL_FAILURE_FINISH_PROMPT_TEMPLATE from "./prompts/agent-termi
 
 const MAX_RECENT_EVENTS = 5;
 const MAX_LIST_DIRECTORY_ENTRIES = 40;
+const MAX_AGENT_MESSAGE_LENGTH = 1_200;
 const MAX_READ_ONLY_TOOL_CALLS = 5;
 const MAX_RECOVERY_TURNS = 5;
 const MAX_SAME_FAILURE_REPEATS = 3;
@@ -54,10 +56,14 @@ const READ_ONLY_TOOL_NAMES = new Set<SandboxAgentToolName>([
   "read_file",
   "search_code",
 ]);
+const WRITE_TOOL_NAMES = new Set<SandboxAgentToolName>([
+  "replace_in_file",
+  "write_file",
+]);
 
 const finishSchema = z.object({
   clarificationQuestion: z.string().trim().min(1).max(240).optional(),
-  message: z.string().trim().min(1).max(400),
+  message: z.string().trim().min(1).max(MAX_AGENT_MESSAGE_LENGTH),
   status: z.enum(["completed", "blocked"]),
 });
 
@@ -217,14 +223,31 @@ function formatPromptTemplate(
   ).trim();
 }
 
-function buildAgentSystemPrompt() {
+function buildAgentSystemPrompt(mode: SandboxAgentMode) {
   return formatPromptTemplate(AGENT_SYSTEM_PROMPT_TEMPLATE, {
+    AGENT_MODE: mode,
     MAX_READ_ONLY_TOOL_CALLS: String(MAX_READ_ONLY_TOOL_CALLS),
+    MODE_INSTRUCTIONS:
+      mode === "plan"
+        ? [
+            "Plan mode is read-only. Use repository tools to answer questions, investigate, review, or prepare an actionable implementation plan.",
+            "If the user requests implementation, do not claim to have changed files. Finish with the plan and tell them to switch to Build mode when they want it applied.",
+            "Never switch modes yourself.",
+          ].join(" ")
+        : [
+            "Build mode permits file edits, but only when the user's instruction explicitly requests a change.",
+            "Questions and explanations do not authorize edits. Never switch modes yourself.",
+          ].join(" "),
   });
 }
 
-function buildAgentFinishPrompt() {
-  return formatPromptTemplate(AGENT_FINISH_PROMPT_TEMPLATE);
+function buildAgentFinishPrompt(mode: SandboxAgentMode) {
+  return formatPromptTemplate(AGENT_FINISH_PROMPT_TEMPLATE, {
+    MODE_FINISH_INSTRUCTION:
+      mode === "plan"
+        ? "If the user requested implementation, summarize the actionable plan and tell them to switch to Build mode to apply it. Do not claim files were changed."
+        : "Report only changes that were actually completed.",
+  });
 }
 
 function buildTerminalFailureFinishPrompt() {
@@ -242,13 +265,14 @@ function buildAgentUserPrompt(input: SandboxAgentInput) {
     `Repository: ${input.repoOwner}/${input.repoName}`,
     `Project id: ${input.projectId}`,
     `Issue #${input.issueNumber}: ${input.issueTitle}`,
+    `Active mode: ${input.mode}`,
     "",
     "User instruction:",
     input.userInstruction,
     "",
     "When you are done or blocked, return JSON with:",
     '- "status": "completed" or "blocked"',
-    '- "message": short user-facing explanation',
+    '- "message": concise user-facing result or implementation plan',
     '- "clarificationQuestion": optional follow-up question when blocked',
   ].join("\n");
 }
@@ -339,6 +363,31 @@ function buildToolFailureResult(
     toolMessageContent: buildToolFailureMessageContent({
       argumentsValue,
       code: message,
+      message,
+      retryable: true,
+      tool,
+    }),
+  };
+}
+
+function buildPlanModeWriteFailureResult(
+  tool: SandboxAgentToolName,
+  argumentsValue: Record<string, unknown>,
+): AgentToolFailure {
+  const code = "write_not_allowed_in_plan_mode";
+  const message =
+    "This workspace is in Plan mode. File edits are unavailable. Do not retry the write. Continue with read-only analysis and tell the user to switch to Build mode when they want the changes applied.";
+
+  return {
+    code,
+    latestObservation: formatToolFeedback(tool, message),
+    message,
+    recentEvent: `${tool} was denied because Plan mode is read-only.`,
+    status: "tool_failure",
+    tool,
+    toolMessageContent: buildToolFailureMessageContent({
+      argumentsValue,
+      code,
       message,
       retryable: true,
       tool,
@@ -555,7 +604,7 @@ function buildFinishResponseSchema() {
         type: "string",
       },
       message: {
-        maxLength: 400,
+        maxLength: MAX_AGENT_MESSAGE_LENGTH,
         minLength: 1,
         type: "string",
       },
@@ -630,19 +679,27 @@ function mergeUsage(previous: AIUsage | undefined, next: AIUsage | undefined) {
 
 async function callAgentToolTurn(
   state: AgentRunState,
+  mode: SandboxAgentMode,
 ): Promise<AIGenerateTextResult> {
+  const tools =
+    mode === "plan"
+      ? sandboxAgentModelTools.filter((tool) =>
+          READ_ONLY_TOOL_NAMES.has(tool.function.name as SandboxAgentToolName),
+        )
+      : sandboxAgentModelTools;
+
   return aiProvider.generateText({
     maxTokens: 1_500,
     messages: state.transcript,
     temperature: 0.1,
     toolChoice: "auto",
-    tools: sandboxAgentModelTools,
+    tools,
   });
 }
 
 async function callAgentFinishTurn(
   state: AgentRunState,
-  finishPrompt = buildAgentFinishPrompt(),
+  finishPrompt: string,
 ): Promise<AIGenerateTextResult> {
   return aiProvider.generateText({
     maxTokens: 1_500,
@@ -669,6 +726,7 @@ async function callAgentFinishTurn(
 async function executeToolCall(
   toolCall: AIToolCall,
   sessionId: string,
+  mode: SandboxAgentMode,
 ): Promise<AgentToolExecutionResult> {
   if (!isSandboxAgentToolName(toolCall.function.name)) {
     return buildUnknownToolFailureResult(
@@ -678,6 +736,14 @@ async function executeToolCall(
   }
 
   const toolName = toolCall.function.name;
+
+  if (mode === "plan" && WRITE_TOOL_NAMES.has(toolName)) {
+    return buildPlanModeWriteFailureResult(
+      toolName,
+      parseToolCallArguments(toolCall),
+    );
+  }
+
   const tool = getSandboxAgentTool(toolName);
 
   if (!tool) {
@@ -918,6 +984,7 @@ function resetRecoveryTracking(state: AgentRunState) {
 async function executeReadOnlyBatch(
   toolCalls: AIToolCall[],
   sessionId: string,
+  mode: SandboxAgentMode,
 ): Promise<AgentToolBatchResult> {
   const executed: ExecutedAgentTool[] = [];
   const touchedPaths: string[] = [];
@@ -925,7 +992,7 @@ async function executeReadOnlyBatch(
   let hadToolFailure = false;
 
   for (const toolCall of toolCalls) {
-    const result = await executeToolCall(toolCall, sessionId);
+    const result = await executeToolCall(toolCall, sessionId, mode);
     executed.push({
       result,
       toolCall,
@@ -1055,6 +1122,7 @@ export async function runSandboxAgent(
   console.log("Sandbox agent started:", {
     instructionPreview: previewText(input.userInstruction, 240),
     issueNumber: input.issueNumber,
+    mode: input.mode,
     projectId: input.projectId,
     repoName: input.repoName,
     repoOwner: input.repoOwner,
@@ -1071,7 +1139,7 @@ export async function runSandboxAgent(
     stepsUsed: 0,
     transcript: [
       {
-        content: buildAgentSystemPrompt(),
+        content: buildAgentSystemPrompt(input.mode),
         role: "system",
       },
       {
@@ -1088,7 +1156,7 @@ export async function runSandboxAgent(
     let modelResponse: AIGenerateTextResult;
 
     try {
-      modelResponse = await callAgentToolTurn(state);
+      modelResponse = await callAgentToolTurn(state, input.mode);
     } catch (error) {
       console.error("Sandbox agent tool turn failed:", error);
       const mappedError = mapModelError(error);
@@ -1147,7 +1215,7 @@ export async function runSandboxAgent(
       return finalizeWithFinishTurn(
         input,
         state,
-        buildAgentFinishPrompt(),
+        buildAgentFinishPrompt(input.mode),
         options,
         undefined,
       );
@@ -1156,7 +1224,11 @@ export async function runSandboxAgent(
     if (toolTurn.status === "single") {
       const toolCall = toolTurn.toolCalls[0];
       await emitToolProgress(options.onProgress, toolCall);
-      const toolResult = await executeToolCall(toolCall, input.sessionId);
+      const toolResult = await executeToolCall(
+        toolCall,
+        input.sessionId,
+        input.mode,
+      );
       logAgentToolResult(input, state.stepsUsed, toolCall, toolResult);
 
       pushRecentEvent(state, toolResult.recentEvent);
@@ -1224,7 +1296,11 @@ export async function runSandboxAgent(
       await emitToolProgress(options.onProgress, toolCall);
     }
 
-    const batchResult = await executeReadOnlyBatch(toolTurn.toolCalls, input.sessionId);
+    const batchResult = await executeReadOnlyBatch(
+      toolTurn.toolCalls,
+      input.sessionId,
+      input.mode,
+    );
 
     for (const executedTool of batchResult.executed) {
       logAgentToolResult(

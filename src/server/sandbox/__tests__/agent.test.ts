@@ -148,6 +148,7 @@ const mockSession: SandboxSession = {
 const baseInput: SandboxAgentInput = {
   issueNumber: 16,
   issueTitle: "Replace HealSync with Tessera",
+  mode: "build",
   projectId: "project-test",
   repoName: "Portfolio",
   repoOwner: "raghavvvgaba",
@@ -220,10 +221,17 @@ function formatPromptTemplate(
 }
 
 const expectedSystemPrompt = formatPromptTemplate(AGENT_SYSTEM_PROMPT_TEMPLATE, {
+  AGENT_MODE: "build",
   MAX_READ_ONLY_TOOL_CALLS: "5",
+  MODE_INSTRUCTIONS: [
+    "Build mode permits file edits, but only when the user's instruction explicitly requests a change.",
+    "Questions and explanations do not authorize edits. Never switch modes yourself.",
+  ].join(" "),
 });
 
-const expectedFinishPrompt = formatPromptTemplate(AGENT_FINISH_PROMPT_TEMPLATE);
+const expectedFinishPrompt = formatPromptTemplate(AGENT_FINISH_PROMPT_TEMPLATE, {
+  MODE_FINISH_INSTRUCTION: "Report only changes that were actually completed.",
+});
 
 const expectedMultiToolRetryPrompt = formatPromptTemplate(
   AGENT_MULTITOOL_RETRY_PROMPT_TEMPLATE,
@@ -394,6 +402,115 @@ describe("runSandboxAgent", () => {
         }),
       ]),
     );
+  });
+
+  it("denies write tools in plan mode and tells the model to hand off to build", async () => {
+    generateTextMock
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "I'll update the README now.",
+          toolCalls: [
+            createToolCall(
+              "write_file",
+              {
+                content: "# Updated project",
+                path: "README.md",
+              },
+              "call-plan-write",
+            ),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "The implementation plan is ready. Switch to Build mode to apply it.",
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: JSON.stringify({
+            message:
+              "The README update is planned. Switch to Build mode to apply it.",
+            status: "completed",
+          }),
+        }),
+      );
+
+    const result = await runSandboxAgent({
+      ...baseInput,
+      mode: "plan",
+      userInstruction: "Update the README with an accurate project summary.",
+    });
+    const firstModelCall = getModelCall(0);
+    const toolMessage = getToolMessages(getFinalModelMessages())[0]!;
+    const toolResult = parseToolMessage(toolMessage);
+    const availableToolNames = firstModelCall?.tools?.map(
+      (tool) => tool.function.name,
+    );
+
+    expect(availableToolNames).toEqual([
+      "glob_files",
+      "list_directory",
+      "read_file",
+      "search_code",
+    ]);
+    expect(writeToolExecuteMock).not.toHaveBeenCalled();
+    expect(replaceToolExecuteMock).not.toHaveBeenCalled();
+    expect(toolResult).toMatchObject({
+      code: "write_not_allowed_in_plan_mode",
+      ok: false,
+      retryable: true,
+      tool: "write_file",
+    });
+    expect(toolResult.message).toContain("switch to Build mode");
+    expect(result).toMatchObject({
+      filesTouched: [],
+      message: "The README update is planned. Switch to Build mode to apply it.",
+      status: "completed",
+    });
+  });
+
+  it("answers a project question in plan mode without suggesting a mode change", async () => {
+    generateTextMock
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "I'll inspect the project metadata.",
+          toolCalls: [
+            createToolCall("list_directory", { path: "." }, "call-list"),
+            createToolCall("read_file", { path: "README.md" }, "call-read"),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: "This is a personal portfolio project.",
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: JSON.stringify({
+            message: "This is a personal portfolio project.",
+            status: "completed",
+          }),
+        }),
+      );
+
+    const result = await runSandboxAgent({
+      ...baseInput,
+      mode: "plan",
+      userInstruction: "What is this project?",
+    });
+
+    expect(listToolExecuteMock).toHaveBeenCalledTimes(1);
+    expect(readToolExecuteMock).toHaveBeenCalledTimes(1);
+    expect(writeToolExecuteMock).not.toHaveBeenCalled();
+    expect(replaceToolExecuteMock).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      filesTouched: ["README.md"],
+      message: "This is a personal portfolio project.",
+      status: "completed",
+    });
+    expect(result.message).not.toContain("Build mode");
   });
 
   it("accepts a valid two-call read-only batch and appends both tool results", async () => {

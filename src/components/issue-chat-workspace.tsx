@@ -27,6 +27,7 @@ import { useSidebar } from "~/components/issue-workspace-layout";
 import { buildIssueChatRuntimeMessage } from "~/lib/issue-chat-messages";
 import { sandboxSessionUpdatedEvent } from "~/lib/sandbox-events";
 import { parseSseFrames } from "~/lib/sse";
+import type { SandboxAgentMode } from "~/server/sandbox/types";
 
 type IssueChatWorkspaceProps = {
   accessBlocked: boolean;
@@ -113,6 +114,7 @@ export function IssueChatWorkspace({
   const router = useRouter();
   const [messages, setMessages] = useState(initialMessages);
   const [instruction, setInstruction] = useState(initialInstruction);
+  const [agentMode, setAgentMode] = useState<SandboxAgentMode>("plan");
   const [isRunning, setIsRunning] = useState(false);
   const [isClearingChat, setIsClearingChat] = useState(false);
   const [isClearChatDialogOpen, setIsClearChatDialogOpen] = useState(false);
@@ -311,6 +313,7 @@ export function IssueChatWorkspace({
       const response = await fetch(agentAction, {
         body: JSON.stringify({
           instruction: trimmedInstruction,
+          mode: agentMode,
           sessionId,
         }),
         headers: {
@@ -574,7 +577,9 @@ export function IssueChatWorkspace({
         accessBlocked={accessBlocked}
         instruction={instruction}
         isPreparing={isRunning}
+        mode={agentMode}
         onInstructionChange={setInstruction}
+        onModeChange={setAgentMode}
         onPrepareEdit={handleRunAgent}
       />
       </AIChat>

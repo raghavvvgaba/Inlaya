@@ -188,9 +188,12 @@ export type SandboxAgentStatus =
   | "blocked"
   | "failed";
 
+export type SandboxAgentMode = "build" | "plan";
+
 export type SandboxAgentInput = {
   issueNumber: number;
   issueTitle: string;
+  mode: SandboxAgentMode;
   projectId: string;
   repoName: string;
   repoOwner: string;

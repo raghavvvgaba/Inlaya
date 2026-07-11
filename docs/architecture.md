@@ -111,6 +111,12 @@ Issue chat persistence uses:
 
 The issue page loads saved messages on render, and the workspace uses them as the initial transcript. Runtime status/error copy is centralized in [src/lib/issue-chat-messages.ts](../src/lib/issue-chat-messages.ts).
 
+## Agent Modes
+
+Each issue-agent request carries an ephemeral `plan` or `build` mode. Plan is the UI and API default and limits the model to read-only discovery tools. Build includes file-editing tools. The agent loop also checks mode immediately before tool execution, so a Plan-mode write cannot reach the sandbox provider even if the model requests it.
+
+The mode is included in the model prompt and run logs. Plan-mode implementation requests should return an actionable plan and tell the user to switch to Build; the application never changes modes automatically.
+
 ## Documentation Boundaries
 
 Use the docs like this:
