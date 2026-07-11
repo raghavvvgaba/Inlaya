@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { type ReactNode, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -65,6 +67,26 @@ export function AIChat({
   fullBleed = false,
   messages,
 }: AIChatProps) {
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const latestMessage = messages.at(-1);
+
+  useEffect(() => {
+    const scrollArea = scrollAreaRef.current;
+
+    if (!scrollArea) {
+      return;
+    }
+
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+
+    scrollArea.scrollTo({
+      behavior: reduceMotion ? "auto" : "smooth",
+      top: scrollArea.scrollHeight,
+    });
+  }, [latestMessage?.body, latestMessage?.id]);
+
   return (
     <section
       className={cn(
@@ -74,7 +96,10 @@ export function AIChat({
     >
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.05)_1px,transparent_1px)] dark:bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:24px_24px] opacity-100 dark:opacity-[0.06]" />
 
-      <div className="relative min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6">
+      <div
+        ref={scrollAreaRef}
+        className="relative min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6"
+      >
         <div
           className={cn(
             "flex w-full flex-col gap-4",
@@ -89,7 +114,7 @@ export function AIChat({
               <article
                 key={message.id}
                 className={cn(
-                  "flex w-full gap-3",
+                  "flex w-full gap-3 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-300 motion-safe:ease-out",
                   isUser ? "justify-end" : "justify-start",
                 )}
               >

@@ -1,7 +1,7 @@
 export const PROJECT_DIR = "/home/user/repo";
 export const PREVIEW_PORT = 5173;
 export const PREVIEW_VERSION_PATH = "__preview_version.txt";
-export const SANDBOX_TIMEOUT_MS = 30 * 60_000;
+export const SANDBOX_TIMEOUT_MS = 60 * 60_000;
 export const SANDBOX_METADATA_APP = "devin-e2b-preview";
 export const STARTUP_PREVIEW_TIMEOUT_MS = 75_000;
 export const RESTART_PREVIEW_TIMEOUT_MS = 15_000;

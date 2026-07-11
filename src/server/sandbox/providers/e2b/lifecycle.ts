@@ -27,6 +27,7 @@ import {
   ensurePreviewServer,
   restartPreviewServer,
   startPreviewServer,
+  syncPreviewHealth,
   waitForPreview,
 } from "~/server/sandbox/providers/e2b/preview";
 import {
@@ -382,6 +383,15 @@ export async function heartbeatSandboxSession(sessionId: string) {
       session.sessionId,
       new Date(session.lastHeartbeatAt),
     );
+  }
+
+  if (session.status === "running") {
+    try {
+      await syncPreviewHealth(session);
+    } catch {
+      // Heartbeats keep the sandbox alive. A transient preview-health failure
+      // must not turn that request into an empty platform-level 500 response.
+    }
   }
 
   return publicSession(session);

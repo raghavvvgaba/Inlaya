@@ -372,39 +372,38 @@ export async function checkViteReactPreviewBrowser(
   }
 }
 
-async function syncPreviewHealth(session: E2BSandboxSession) {
-  const processRunning = await isPreviewProcessRunning(session);
-
-  if (!processRunning) {
-    setPreviewState(session, "offline", "Preview offline. Restarting now.");
-    return false;
-  }
-
+export async function syncPreviewHealth(session: E2BSandboxSession) {
   const urlReachable = await isPreviewUrlReachable(session);
-  if (!urlReachable) {
-    setPreviewState(session, "recovering", "Preview reconnecting.");
-    return false;
-  }
 
-  const observedVersion = await fetchPreviewVersion(session);
-  if (observedVersion) {
-    session.previewObservedVersion = observedVersion;
-    if (!session.previewVersion) {
-      session.previewVersion = observedVersion;
+  if (urlReachable) {
+    const observedVersion = await fetchPreviewVersion(session);
+    if (observedVersion) {
+      session.previewObservedVersion = observedVersion;
+      if (!session.previewVersion) {
+        session.previewVersion = observedVersion;
+      }
     }
-  }
 
-  if (session.previewVersion && observedVersion && observedVersion !== session.previewVersion) {
-    setPreviewState(
-      session,
-      "stale",
-      "Change saved. Refresh the preview tab if it still looks old.",
-    );
+    if (session.previewVersion && observedVersion && observedVersion !== session.previewVersion) {
+      setPreviewState(
+        session,
+        "stale",
+        "Change saved. Refresh the preview tab if it still looks old.",
+      );
+      return true;
+    }
+
+    setPreviewState(session, "ready", "Preview ready.");
     return true;
   }
 
-  setPreviewState(session, "ready", "Preview ready.");
-  return true;
+  const processRunning = await isPreviewProcessRunning(session);
+  setPreviewState(
+    session,
+    processRunning ? "recovering" : "offline",
+    processRunning ? "Preview reconnecting." : "Preview unavailable.",
+  );
+  return false;
 }
 
 export async function ensurePreviewServer(session: E2BSandboxSession) {

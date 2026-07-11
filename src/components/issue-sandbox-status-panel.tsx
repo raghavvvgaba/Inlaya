@@ -4,12 +4,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Bug,
+  Copy,
   ExternalLink,
   LoaderCircle,
   Play,
   RefreshCw,
   Square,
+  Terminal,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "~/components/ui/button";
 import {
@@ -159,7 +162,7 @@ export function IssueSandboxStatusPanel({
   const isActive = session ? ACTIVE_STATUSES.has(session.status) : false;
   const canStart = !session || session.status === "stopped" || session.status === "error";
   const canOpenPreview =
-    session?.status === "running" && session.previewState === "ready";
+    session?.status === "running" && Boolean(session.previewUrl);
   const status = session?.status ?? "stopped";
   const statusMessage =
     session?.status === "stopped" || session?.status === "error"
@@ -168,12 +171,17 @@ export function IssueSandboxStatusPanel({
   const displayMessage =
     statusMessage ?? "Start a preview environment for this issue.";
 
-  // Notify parent when preview URL availability changes
+  // Keep the embedded browser available whenever the sandbox still owns a URL.
+  // Readiness controls status messaging, not whether the user can access it.
   useEffect(() => {
     if (onPreviewUrlChange) {
-      onPreviewUrlChange(canOpenPreview && session?.previewUrl ? session.previewUrl : null);
+      onPreviewUrlChange(
+        session?.previewUrl && session.status !== "stopped"
+          ? session.previewUrl
+          : null,
+      );
     }
-  }, [canOpenPreview, session?.previewUrl, onPreviewUrlChange]);
+  }, [onPreviewUrlChange, session?.previewUrl, session?.status]);
 
   const saveSession = useCallback(
     (nextSession: SandboxSession) => {
@@ -460,6 +468,17 @@ export function IssueSandboxStatusPanel({
     }
   }
 
+  async function handleCopyPreviewUrl() {
+    if (!session?.previewUrl) return;
+
+    try {
+      await navigator.clipboard.writeText(session.previewUrl);
+      toast.success("Preview URL copied.");
+    } catch {
+      toast.error("Preview URL could not be copied.");
+    }
+  }
+
   return (
     <div className="flex w-full items-center justify-between gap-4">
       {/* Left side: Status and Real-time message */}
@@ -569,6 +588,55 @@ export function IssueSandboxStatusPanel({
               <Bug className="mr-1.5 h-3.5 w-3.5" />
             )}
             {isCheckingPreview ? "Checking" : "Check"}
+          </Button>
+        ) : null}
+
+        {session && session.status === "running" ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                aria-label="Open sandbox diagnostics"
+                className="h-8 rounded-none text-xs"
+                disabled={session.logs.length === 0}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                <Terminal className="mr-1.5 h-3.5 w-3.5" />
+                Diagnostics
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className="w-[min(36rem,calc(100vw-2rem))] rounded-none border-border bg-zinc-950 p-0 text-zinc-100 shadow-2xl"
+            >
+              <DropdownMenuLabel className="flex items-center justify-between gap-3 border-b border-white/10 px-3 py-2">
+                <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-zinc-300">
+                  <span className="h-1.5 w-1.5 bg-emerald-400" />
+                  Sandbox logs
+                </span>
+                <span className="font-mono text-[10px] font-normal text-zinc-500">
+                  {session.logs.length} {session.logs.length === 1 ? "line" : "lines"}
+                </span>
+              </DropdownMenuLabel>
+              <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-[11px] leading-5 text-zinc-300">
+                {session.logs.join("")}
+              </pre>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
+
+        {session?.previewUrl && session.status === "running" ? (
+          <Button
+            aria-label="Copy preview URL"
+            className="h-8 w-8 rounded-none p-0"
+            onClick={handleCopyPreviewUrl}
+            size="icon"
+            title="Copy preview URL"
+            type="button"
+            variant="outline"
+          >
+            <Copy className="h-3.5 w-3.5" />
           </Button>
         ) : null}
 

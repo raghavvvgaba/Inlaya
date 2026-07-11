@@ -37,7 +37,7 @@ export function ChatInputBox({
     <div className="flex w-full flex-col">
       <textarea
         ref={textareaRef}
-        className="min-h-[40px] w-full resize-none bg-transparent text-xs leading-5 text-foreground outline-none placeholder:text-muted-foreground"
+        className="min-h-[40px] w-full resize-none bg-transparent text-xs leading-5 text-foreground outline-none transition-opacity duration-200 placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
         disabled={accessBlocked || isPreparing}
         onChange={(event) => {
           onInstructionChange(event.target.value);
@@ -61,7 +61,7 @@ export function ChatInputBox({
       <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
         <Button
           className="ml-auto h-6 rounded-none px-2 text-[10px] font-medium"
-          disabled={accessBlocked || isPreparing}
+          disabled={accessBlocked || isPreparing || !instruction.trim()}
           onClick={onPrepareEdit}
           type="button"
         >

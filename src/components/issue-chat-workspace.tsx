@@ -299,6 +299,7 @@ export function IssueChatWorkspace({
       role: "user",
     };
 
+    setInstruction("");
     setIsRunning(true);
     setMessages((current) => [
       ...current,
@@ -335,7 +336,6 @@ export function IssueChatWorkspace({
         return;
       }
 
-      setInstruction("");
       const nextMessages =
         result.messages && result.messages.length > 0
           ? result.messages

@@ -35,10 +35,10 @@ export function IssueWorkspaceLayout({
         {/* Left Pane */}
         <div
           className={cn(
-            "flex flex-col border-r border-border transition-all duration-300 ease-in-out",
+            "flex shrink-0 flex-col overflow-hidden border-r border-border transition-[width,opacity,border-color] duration-300 ease-in-out motion-reduce:transition-none",
             isOpen
-              ? "w-[400px] min-w-[350px] max-w-[500px]"
-              : "w-0 border-none opacity-0 pointer-events-none overflow-hidden",
+              ? "w-[400px] opacity-100"
+              : "pointer-events-none w-0 border-transparent opacity-0",
           )}
         >
           <div className="flex h-full w-[400px] flex-col">
