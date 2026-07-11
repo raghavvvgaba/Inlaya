@@ -13,6 +13,7 @@ vi.mock("~/server/sandbox/provider", () => ({
 import {
   buildSearchCommand,
   buildSearchResult,
+  normalizeSearchIncludes,
   normalizeSearchQuery,
   parseSearchMatches,
   searchSandboxCode,
@@ -55,6 +56,25 @@ describe("normalizeSearchQuery", () => {
   });
 });
 
+describe("normalizeSearchIncludes", () => {
+  it("trims include patterns", () => {
+    expect(normalizeSearchIncludes([" **/*.tsx ", " !**/*.test.tsx "])).toEqual([
+      "**/*.tsx",
+      "!**/*.test.tsx",
+    ]);
+  });
+
+  it("returns an empty list when include is omitted", () => {
+    expect(normalizeSearchIncludes(undefined)).toEqual([]);
+  });
+
+  it("rejects blank include patterns", () => {
+    expect(() => normalizeSearchIncludes([" "])).toThrow(
+      "invalid_include_pattern",
+    );
+  });
+});
+
 describe("buildSearchCommand", () => {
   it("builds a root search command", () => {
     const command = buildSearchCommand({
@@ -78,6 +98,30 @@ describe("buildSearchCommand", () => {
 
     expect(command).toContain("-- '/home/user/repo/src/components'");
     expect(command).toContain("-e 'it'\\''s broken'");
+  });
+
+  it("adds shell-quoted include and exclude patterns", () => {
+    const command = buildSearchCommand({
+      include: ["src/**/*.tsx", "!**/*.test.tsx", "**/owner's.tsx"],
+      path: "",
+      query: "Button",
+    });
+
+    expect(command).toContain("-g 'src/**/*.tsx'");
+    expect(command).toContain("-g '!**/*.test.tsx'");
+    expect(command).toContain("-g '**/owner'\\''s.tsx'");
+  });
+
+  it("uses regex mode without fixed-string matching", () => {
+    const command = buildSearchCommand({
+      path: "",
+      query: "use(State|Effect)",
+      regex: true,
+    });
+
+    expect(command).not.toContain("--fixed-strings");
+    expect(command).toContain("-e 'use(State|Effect)'");
+    expect(command).toContain("--smart-case");
   });
 });
 
@@ -186,13 +230,17 @@ describe("searchSandboxCode", () => {
     });
 
     const result = await searchSandboxCode({
+      include: ["src/**/*.tsx"],
       path: "",
       query: "useState",
+      regex: false,
       sessionId: "session-test",
     });
 
     expect(runRawCommandMock).toHaveBeenCalledWith({
-      command: expect.stringContaining("-e 'useState'"),
+      command: expect.stringMatching(
+        /-g 'src\/\*\*\/\*\.tsx'.*-e 'useState'/,
+      ),
       sessionId: "session-test",
     });
     expect(result).toEqual({

@@ -13,7 +13,10 @@ vi.mock("~/server/sandbox/provider", () => ({
 }));
 
 import { MAX_SANDBOX_FILE_BYTES } from "../files";
-import { replaceSandboxFileText } from "../replace-in-file";
+import {
+  REPLACE_CANDIDATE_LINE_CAP,
+  replaceSandboxFileText,
+} from "../replace-in-file";
 
 const mockSession = {
   environmentId: "env-test",
@@ -116,10 +119,50 @@ describe("replaceSandboxFileText", () => {
     expect(writeRawFileMock).not.toHaveBeenCalled();
   });
 
-  it("fails when oldText is missing from the target line", async () => {
+  it("returns candidate lines when oldText is missing from the target line", async () => {
+    readRawFileMock.mockResolvedValueOnce({
+      content: "Full stack developer\nsecond\nFull stack developer\nfourth",
+      path: "src/components/Hero.jsx",
+      size: 58,
+    });
+
+    await expect(
+      replaceSandboxFileText(buildInput({ startLine: 2 })),
+    ).rejects.toThrow(
+      "line_text_mismatch: oldText found on candidate lines 1, 3",
+    );
+    expect(writeRawFileMock).not.toHaveBeenCalled();
+  });
+
+  it("reports when oldText is not found elsewhere in the file", async () => {
     await expect(
       replaceSandboxFileText(buildInput({ oldText: "missing" })),
-    ).rejects.toThrow("line_text_mismatch");
+    ).rejects.toThrow(
+      "line_text_mismatch: oldText was not found elsewhere in the file",
+    );
+    expect(writeRawFileMock).not.toHaveBeenCalled();
+  });
+
+  it("caps candidate line numbers in mismatch failures", async () => {
+    readRawFileMock.mockResolvedValueOnce({
+      content: [
+        ...Array.from(
+          { length: REPLACE_CANDIDATE_LINE_CAP + 1 },
+          () => "Full stack developer",
+        ),
+        "target line without the text",
+      ].join("\n"),
+      path: "src/components/Hero.jsx",
+      size: 200,
+    });
+
+    await expect(
+      replaceSandboxFileText(
+        buildInput({ startLine: REPLACE_CANDIDATE_LINE_CAP + 2 }),
+      ),
+    ).rejects.toThrow(
+      "line_text_mismatch: oldText found on candidate lines 1, 2, 3, 4, 5 and 1 more",
+    );
     expect(writeRawFileMock).not.toHaveBeenCalled();
   });
 

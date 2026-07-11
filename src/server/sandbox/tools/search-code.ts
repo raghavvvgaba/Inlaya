@@ -80,22 +80,40 @@ export function normalizeSearchQuery(query: string) {
   return normalizedQuery;
 }
 
+export function normalizeSearchIncludes(include: string[] | undefined) {
+  if (!include) {
+    return [];
+  }
+
+  const normalizedIncludes = include.map((pattern) => pattern.trim());
+
+  if (normalizedIncludes.some((pattern) => !pattern)) {
+    throw new Error("invalid_include_pattern");
+  }
+
+  return normalizedIncludes;
+}
+
 export function buildSearchCommand(
-  input: Pick<SandboxSearchInput, "path" | "query">,
+  input: Pick<SandboxSearchInput, "include" | "path" | "query" | "regex">,
 ) {
   const normalizedPath = normalizeSandboxRelativePath(input.path, {
     allowRoot: true,
   });
   const repoPath = toSandboxRepoPath(normalizedPath);
+  const includeArguments = (input.include ?? []).map(
+    (pattern) => `-g ${quoteForShell(pattern)}`,
+  );
 
   return [
     "rg",
     "--json",
     "--line-number",
     "--column",
-    "--fixed-strings",
+    ...(input.regex ? [] : ["--fixed-strings"]),
     "--smart-case",
     `--max-count ${SANDBOX_SEARCH_PER_FILE_CAP}`,
+    ...includeArguments,
     "-g '!**/.git/**'",
     "-g '!**/.next/**'",
     "-g '!**/.turbo/**'",
@@ -176,10 +194,12 @@ export async function searchSandboxCode(
   input: SandboxSearchInput,
 ): Promise<SandboxSearchResult> {
   const query = normalizeSearchQuery(input.query);
+  const include = normalizeSearchIncludes(input.include);
 
   const result = await sandboxProvider.runRawCommand({
     command: buildSearchCommand({
       ...input,
+      include,
       path: input.path ?? "",
       query,
     }),
@@ -191,8 +211,10 @@ export async function searchSandboxCode(
 
 const searchArgumentsSchema = z
   .object({
+    include: z.array(z.string()).min(1).optional(),
     path: z.string().optional(),
     query: z.string(),
+    regex: z.boolean().optional(),
   })
   .strict();
 
@@ -204,8 +226,10 @@ export const searchSandboxAgentTool = {
     const parsedArguments = searchArgumentsSchema.parse(args);
 
     return searchSandboxCode({
+      include: parsedArguments.include,
       path: parsedArguments.path ?? "",
       query: parsedArguments.query,
+      regex: parsedArguments.regex ?? false,
       sessionId: context.sessionId,
     });
   },
@@ -213,13 +237,25 @@ export const searchSandboxAgentTool = {
   parameters: {
     additionalProperties: false,
     properties: {
+      include: {
+        description:
+          "Optional ripgrep glob patterns limiting which files are searched. Leading ! excludes matches.",
+        items: { type: "string" },
+        minItems: 1,
+        type: "array",
+      },
       path: {
         description: "Optional repository-relative path to limit the search.",
         type: "string",
       },
       query: {
-        description: "Literal text to search for.",
+        description:
+          "Text to search for. Treated literally unless regex is true.",
         type: "string",
+      },
+      regex: {
+        description: "Interpret query as a ripgrep regular expression.",
+        type: "boolean",
       },
     },
     required: ["query"],

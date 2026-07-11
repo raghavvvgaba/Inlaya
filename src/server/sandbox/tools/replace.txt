@@ -6,4 +6,5 @@ Usage:
 - `startLine` is 1-based and should come from read_file output.
 - `oldText` must be exact text from the target line.
 - The target line must contain `oldText` exactly once.
+- If the target line does not match, the failure may include candidate line numbers. Read the candidate line before retrying.
 - Use write_file instead for full rewrites or new complete file contents.

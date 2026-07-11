@@ -65,8 +65,10 @@ export type SandboxListFilesInput = {
 };
 
 export type SandboxSearchInput = {
+  include?: string[];
   path?: string;
   query: string;
+  regex?: boolean;
   sessionId: string;
 };
 

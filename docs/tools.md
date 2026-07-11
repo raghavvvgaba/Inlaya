@@ -40,6 +40,8 @@ Input:
 - `sessionId: string`
 - `query: string`
 - `path?: string`
+- `include?: string[]`
+- `regex?: boolean`
 
 Output:
 - `matches: array`
@@ -57,13 +59,19 @@ Limits:
 - max `2` matches per file
 
 Behavior:
-- literal text search only in v1
+- literal text search by default
+- `regex=true` interprets `query` as a ripgrep regular expression
+- `include` limits searched files with ripgrep glob patterns and supports leading `!` exclusions
 - returns single-line matches only
 - skips hidden files by default
 - `truncated=true` means result cap was hit
 - more matches may exist
-- v1 does not support pagination
+- does not support pagination
 - caller should narrow query/path and retry
+
+Examples:
+- `{ query: "Full stack developer", include: ["**/*.{jsx,tsx}"] }`
+- `{ query: "use(State|Effect)", include: ["src/**/*.tsx", "!**/*.test.tsx"], regex: true }`
 
 ## `replace_in_file`
 
@@ -89,5 +97,7 @@ Behavior:
 - normalizes line endings to `\n`
 - target line must exist
 - target line must contain `oldText` exactly once
+- when the target line does not contain `oldText`, the failure returns up to `5` candidate line numbers where it appears elsewhere
+- caller should inspect a candidate line with `read_file` before retrying
 - writes the full updated file through the sandbox provider
 - use this for targeted line edits instead of full-file `write_file`

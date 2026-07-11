@@ -11,6 +11,8 @@ import type { SandboxSession } from "~/server/sandbox/types";
 
 import DESCRIPTION from "./replace.txt";
 
+export const REPLACE_CANDIDATE_LINE_CAP = 5;
+
 type ReplaceInFileInput = {
   newText: string;
   oldText: string;
@@ -37,6 +39,24 @@ function countOccurrences(value: string, search: string) {
   }
 
   return count;
+}
+
+function buildLineTextMismatchMessage(lines: string[], oldText: string) {
+  const candidateLines = lines
+    .map((line, index) => (line.includes(oldText) ? index + 1 : undefined))
+    .filter((line): line is number => line !== undefined);
+
+  if (candidateLines.length === 0) {
+    return "line_text_mismatch: oldText was not found elsewhere in the file";
+  }
+
+  const visibleCandidates = candidateLines.slice(0, REPLACE_CANDIDATE_LINE_CAP);
+  const remainingCount = candidateLines.length - visibleCandidates.length;
+
+  return [
+    `line_text_mismatch: oldText found on candidate ${visibleCandidates.length === 1 ? "line" : "lines"} ${visibleCandidates.join(", ")}`,
+    ...(remainingCount > 0 ? [`and ${remainingCount} more`] : []),
+  ].join(" ");
 }
 
 export async function replaceSandboxFileText(
@@ -66,7 +86,7 @@ export async function replaceSandboxFileText(
   const matchCount = countOccurrences(currentLine, input.oldText);
 
   if (matchCount === 0) {
-    throw new Error("line_text_mismatch");
+    throw new Error(buildLineTextMismatchMessage(lines, input.oldText));
   }
 
   if (matchCount > 1) {

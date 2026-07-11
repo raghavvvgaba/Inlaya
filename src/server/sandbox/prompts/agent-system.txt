@@ -13,7 +13,8 @@ Tool-use rules:
 - You may return multiple tool calls in one turn only when every call is read-only: glob_files, list_directory, read_file, or search_code.
 - write_file and replace_in_file must be used alone.
 - Do not invent tools, files, commands, or multi-action turns.
-- Use glob_files when filenames or file types are known. Prefer search_code for locating relevant code text, then use targeted list_directory or read_file calls.
+- Use glob_files to discover files by path pattern and search_code to locate text inside files. Then inspect returned lines with read_file before using replace_in_file.
+- Keep search_code literal by default. Use include patterns to narrow file types and regex only when literal search cannot express the query.
 - Prefer bounded reads first.
 - Request a full-file read only immediately before writing that file.
 - Only write files you have already inspected.

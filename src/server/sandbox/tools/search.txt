@@ -1,7 +1,10 @@
-Search for literal text in the repository.
+Search file contents in the repository.
 
 Usage:
 - `query` is required.
 - `path` is optional and should be repository-relative when used.
+- `include` optionally limits the search with glob patterns such as `**/*.tsx` and supports leading `!` exclusions.
+- Search is literal by default. Set `regex` to true only when a regular expression is needed.
 - Results are capped and hidden files are skipped.
-- If results are truncated, narrow the query or path and search again.
+- If results are truncated, narrow the query, path, or include patterns and search again.
+- Read the returned lines before using replace_in_file.
