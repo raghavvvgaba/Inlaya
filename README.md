@@ -28,7 +28,7 @@ Devin is a Next.js app for importing a GitHub repository, browsing its issues, a
 - Prisma + PostgreSQL
 - GitHub App / GitHub OAuth
 - E2B sandboxes
-- OpenRouter for AI edit generation
+- OpenCode Go or OpenRouter for AI edit generation (selectable via `AI_PROVIDER`)
 
 ## Project Structure
 
@@ -53,7 +53,7 @@ Devin is a Next.js app for importing a GitHub repository, browsing its issues, a
 - Clerk project credentials
 - GitHub App credentials
 - E2B API key
-- OpenRouter API key if you want AI edit generation enabled
+- OpenCode Go API key (`OPENCODE_API_KEY`) if using the default provider, or an OpenRouter API key (`OPENROUTER_API_KEY`) if `AI_PROVIDER=openrouter`
 
 ## Environment Variables
 
@@ -71,6 +71,9 @@ Server-side variables:
 - `GITHUB_APP_INSTALL_URL`
 - `OPENROUTER_API_KEY`
 - `OPENROUTER_MODEL`
+- `OPENCODE_API_KEY`
+- `OPENCODE_GO_MODEL`
+- `AI_PROVIDER` — `"opencode-go"` (default) or `"openrouter"`
 - `E2B_API_KEY`
 - `E2B_SANDBOX_TEMPLATE`
 

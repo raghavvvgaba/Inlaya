@@ -17,6 +17,9 @@ export const env = createEnv({
     GITHUB_APP_INSTALL_URL: z.string().url(),
     OPENROUTER_API_KEY: z.string().min(1).optional(),
     OPENROUTER_MODEL: z.string().min(1).optional(),
+    OPENCODE_API_KEY: z.string().min(1).optional(),
+    OPENCODE_GO_MODEL: z.string().min(1).optional(),
+    AI_PROVIDER: z.enum(["openrouter", "opencode-go"]).default("opencode-go"),
     E2B_API_KEY: z.string().min(1).optional(),
     E2B_SANDBOX_TEMPLATE: z
       .string()
@@ -54,6 +57,9 @@ export const env = createEnv({
     GITHUB_APP_INSTALL_URL: process.env.GITHUB_APP_INSTALL_URL,
     OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
     OPENROUTER_MODEL: process.env.OPENROUTER_MODEL,
+    OPENCODE_API_KEY: process.env.OPENCODE_API_KEY,
+    OPENCODE_GO_MODEL: process.env.OPENCODE_GO_MODEL,
+    AI_PROVIDER: process.env.AI_PROVIDER,
     E2B_API_KEY: process.env.E2B_API_KEY,
     E2B_SANDBOX_TEMPLATE: process.env.E2B_SANDBOX_TEMPLATE,
     NODE_ENV: process.env.NODE_ENV,

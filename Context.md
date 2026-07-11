@@ -131,7 +131,7 @@ This is intentionally not modeled as durable database state yet. It may be repla
 | Database | Neon Postgres |
 | ORM | Prisma |
 | GitHub integration | GitHub App |
-| AI edit generation | OpenRouter |
+| AI edit generation | OpenCode Go (default) or OpenRouter via `AI_PROVIDER` |
 
 ### Why This Stack
 
@@ -263,26 +263,18 @@ Store only app-owned data needed to recover state later. Fetch GitHub-owned data
   - fetches issue details live from GitHub.
   - gets or creates the default chat session.
   - loads persisted chat messages.
-  - reads temporary pending edit / commit / PR cookie state.
 
-- `POST /projects/:id/issues/:issueNumber/edit`
-  - prepares a small AI-generated file edit for the issue.
-  - persists the user and assistant chat messages.
-  - writes the temporary pending edit cookie only after chat persistence succeeds.
+- `POST /projects/:id/issues/:issueNumber/sandbox/agent`
+  - runs the sandbox agent for this issue in plan or build mode.
+  - streams progress events to the UI.
+  - persists user and assistant chat messages after a successful run.
 
-- `POST /projects/:id/issues/:issueNumber/edit/cancel`
-  - clears the temporary pending edit cookie.
-  - does not delete persisted chat messages.
+- `POST /projects/:id/issues/:issueNumber/sandbox/submit`
+  - commits sandbox changes to a new or reused branch.
+  - opens or reuses a pull request for that branch.
 
-- `POST /projects/:id/issues/:issueNumber/commit`
-  - creates or reuses the issue branch.
-  - commits the prepared file edit to GitHub.
-  - clears the pending edit after successful commit.
-  - writes temporary post-commit cookie state.
-
-- `POST /projects/:id/issues/:issueNumber/pull-request`
-  - creates or reuses the pull request for the issue branch.
-  - writes temporary PR cookie state.
+- `POST /projects/:id/issues/:issueNumber/chat`
+  - clears persisted chat messages for this issue.
 
 ### API Design Principle
 
