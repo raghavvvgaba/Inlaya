@@ -200,6 +200,7 @@ export type SandboxAgentInput = {
   issueNumber: number;
   issueTitle: string;
   mode: SandboxAgentMode;
+  model?: string;
   projectId: string;
   repoName: string;
   repoOwner: string;

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { isAgentModelId } from "~/lib/agent-models";
 import {
   appendIssueChatMessages,
   getIssueChatMessages,
@@ -138,6 +139,8 @@ export async function POST(
   const sessionId = readStringField(body, "sessionId");
   const instruction = readStringField(body, "instruction");
   const mode = parseSandboxAgentMode(body?.mode);
+  const requestedModel = readStringField(body, "model");
+  const model = isAgentModelId(requestedModel) ? requestedModel : undefined;
 
   if (!mode) {
     return jsonFailure("Choose either Plan or Build mode.", 400);
@@ -193,6 +196,7 @@ export async function POST(
           issueNumber: access.issueNumber,
           issueTitle: issueResult.issue.title,
           mode,
+          model,
           projectId: access.project.id,
           repoName: access.project.repoName,
           repoOwner: access.project.repoOwner,

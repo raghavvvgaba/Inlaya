@@ -681,6 +681,7 @@ function mergeUsage(previous: AIUsage | undefined, next: AIUsage | undefined) {
 async function callAgentToolTurn(
   state: AgentRunState,
   mode: SandboxAgentMode,
+  model?: string,
 ): Promise<AIGenerateTextResult> {
   const tools =
     mode === "plan"
@@ -692,6 +693,7 @@ async function callAgentToolTurn(
   return aiProvider.generateText({
     maxTokens: 1_500,
     messages: state.transcript,
+    ...(model ? { model } : {}),
     temperature: 0.1,
     toolChoice: "auto",
     tools,
@@ -701,6 +703,7 @@ async function callAgentToolTurn(
 async function callAgentFinishTurn(
   state: AgentRunState,
   finishPrompt: string,
+  model?: string,
 ): Promise<AIGenerateTextResult> {
   return aiProvider.generateText({
     maxTokens: 1_500,
@@ -711,6 +714,7 @@ async function callAgentFinishTurn(
         role: "user",
       },
     ],
+    ...(model ? { model } : {}),
     responseFormat: {
       type: "json_schema",
       jsonSchema: {
@@ -1082,7 +1086,7 @@ async function finalizeWithFinishTurn(
 
   try {
     await emitProgress(options.onProgress, "Finishing up...");
-    finishTurnResponse = await callAgentFinishTurn(state, finishPrompt);
+    finishTurnResponse = await callAgentFinishTurn(state, finishPrompt, input.model);
   } catch (error) {
     console.error("Sandbox agent finish turn failed:", error);
     const mappedError = mapModelError(error);
@@ -1158,7 +1162,7 @@ export async function runSandboxAgent(
     let modelResponse: AIGenerateTextResult;
 
     try {
-      modelResponse = await callAgentToolTurn(state, input.mode);
+      modelResponse = await callAgentToolTurn(state, input.mode, input.model);
     } catch (error) {
       console.error("Sandbox agent tool turn failed:", error);
       const mappedError = mapModelError(error);
