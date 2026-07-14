@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { Separator } from "~/components/ui/separator";
 import { cn } from "~/lib/utils";
+import { ModeToggle } from "~/components/mode-toggle";
 
 type AppShellProps = {
   title: string;
@@ -33,7 +34,7 @@ export function AppShell({
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 text-primary">
             <h1 className="text-sm font-bold tracking-widest uppercase">
-              Devin
+              Inlaya
             </h1>
           </div>
           <Separator orientation="vertical" className="h-6 bg-border/60" />
@@ -42,6 +43,7 @@ export function AppShell({
           </h2>
         </div>
         <div className="flex items-center gap-4">
+          <ModeToggle />
           <UserButton 
             afterSignOutUrl="/" 
             appearance={{
