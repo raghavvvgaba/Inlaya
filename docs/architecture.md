@@ -24,10 +24,8 @@ Frontend screens live under [src/app](../src/app), especially:
 
 Important screens:
 
-- [src/app/(app)/dashboard/page.tsx](../src/app/%28app%29/dashboard/page.tsx)
-  Main signed-in dashboard.
-- [src/app/(app)/projects/new/page.tsx](../src/app/%28app%29/projects/new/page.tsx)
-  Repository import flow.
+- [src/app/(app)/projects/page.tsx](../src/app/%28app%29/projects/page.tsx)
+  Main signed-in project list and repository import flow.
 - [src/app/(app)/projects/[id]/page.tsx](../src/app/%28app%29/projects/%5Bid%5D/page.tsx)
   Project view with issue list and sandbox panel.
 - [src/app/(app)/projects/[id]/issues/[issueNumber]/page.tsx](../src/app/%28app%29/projects/%5Bid%5D/issues/%5BissueNumber%5D/page.tsx)
