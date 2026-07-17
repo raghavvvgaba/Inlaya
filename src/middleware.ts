@@ -11,7 +11,13 @@ const isProtectedRoute = createRouteMatcher([
 
 export default clerkMiddleware(
   async (auth, req) => {
-    if (req.nextUrl.hostname === LEGACY_RENDER_HOST) {
+    const forwardedHost = req.headers.get("x-forwarded-host");
+    const requestHost =
+      forwardedHost?.split(",")[0]?.trim() ??
+      req.headers.get("host")?.split(":")[0] ??
+      req.nextUrl.hostname;
+
+    if (requestHost === LEGACY_RENDER_HOST) {
       const destination = req.nextUrl.clone();
       destination.protocol = "https:";
       destination.hostname = "inlaya.raghavgaba.me";
