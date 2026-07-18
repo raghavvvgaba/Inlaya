@@ -7,23 +7,33 @@ import {
 } from "lucide-react";
 
 import { AppShell } from "~/components/app-shell";
+import { GithubDisconnectDialog } from "~/components/github-disconnect-dialog";
+import { GithubDisconnectToast } from "~/components/github-disconnect-toast";
+import { NewImportModal } from "~/components/new-import-modal";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { NewImportModal } from "~/components/new-import-modal";
 import { env } from "~/env";
 import { getAuth } from "~/server/auth/session";
 import { getProjectsPageData } from "~/server/projects";
 
 type ProjectsPageProps = {
-  searchParams: Promise<{ owner?: string, newImport?: string, success?: string, error?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    newImport?: string;
+    owner?: string;
+    success?: string;
+  }>;
 };
 
 export default async function ProjectsPage({ searchParams }: ProjectsPageProps) {
   const { userId } = await getAuth();
   const params = await searchParams;
   const { githubStatus, projects } = await getProjectsPageData(userId!);
-  
-  const defaultOpen = !!params.newImport || !!params.success || !!params.error;
+
+  const defaultOpen =
+    !!params.newImport ||
+    params.success === "import_session_ready" ||
+    !!params.error;
 
   const projectCount = projects.length;
 
@@ -32,6 +42,10 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
       description=""
       title="Projects"
     >
+      <GithubDisconnectToast
+        didDisconnect={params.success === "disconnected"}
+      />
+
       <div className="flex justify-end pb-8">
         <div className="flex flex-wrap items-center gap-2">
           {githubStatus.connected ? (
@@ -60,6 +74,12 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
           >
             {githubStatus.connected ? "Sync Active" : "Sync Awaiting"}
           </Badge>
+          {githubStatus.connected && githubStatus.githubUsername ? (
+            <GithubDisconnectDialog
+              githubUsername={githubStatus.githubUsername}
+              projectCount={projectCount}
+            />
+          ) : null}
         </div>
       </div>
 

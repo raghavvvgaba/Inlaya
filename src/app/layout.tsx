@@ -1,7 +1,7 @@
 import "~/styles/globals.css";
 
-import { ClerkProvider } from "@clerk/nextjs";
 import { type Metadata } from "next";
+import { ThemedClerkProvider } from "~/components/themed-clerk-provider";
 import { ThemeProvider } from "~/components/theme-provider";
 import { TooltipProvider } from "~/components/ui/tooltip";
 import { Toaster } from "sonner";
@@ -17,25 +17,22 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <ClerkProvider
-      signInFallbackRedirectUrl="/projects"
-      signUpFallbackRedirectUrl="/projects"
-    >
-      <html lang="en" className="antialiased" suppressHydrationWarning>
-        <body className="font-sans min-h-screen bg-background">
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="system"
-            enableSystem
-            disableTransitionOnChange
-          >
+    <html lang="en" className="antialiased" suppressHydrationWarning>
+      <body className="font-sans min-h-screen bg-background">
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <ThemedClerkProvider>
             <TooltipProvider>
               {children}
               <Toaster />
             </TooltipProvider>
-          </ThemeProvider>
-        </body>
-      </html>
-    </ClerkProvider>
+          </ThemedClerkProvider>
+        </ThemeProvider>
+      </body>
+    </html>
   );
 }

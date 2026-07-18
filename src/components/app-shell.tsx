@@ -15,8 +15,6 @@ type AppShellProps = {
 };
 
 import { UserButton } from "@clerk/nextjs";
-import { dark } from "@clerk/themes";
-import { useTheme } from "next-themes";
 
 export function AppShell({
   title,
@@ -26,8 +24,6 @@ export function AppShell({
   children,
   fullHeight = false,
 }: AppShellProps) {
-  const { resolvedTheme } = useTheme();
-
   return (
     <div className="flex h-screen w-full flex-col bg-background overflow-hidden">
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4 transition-[width,height] ease-linear">
@@ -47,7 +43,6 @@ export function AppShell({
           <UserButton 
             afterSignOutUrl="/" 
             appearance={{
-              baseTheme: resolvedTheme === "dark" ? dark : undefined,
               elements: {
                 userButtonAvatarBox: "h-8 w-8 rounded-full",
               }
