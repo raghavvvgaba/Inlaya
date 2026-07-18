@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Github, CheckCircle2, Circle, ArrowRight, ExternalLink, Unlink } from "lucide-react";
 
 import { AppShell } from "~/components/app-shell";
+import { GithubOnboardingToast } from "~/components/github-onboarding-toast";
 import { env } from "~/env";
 import { getAuth } from "~/server/auth/session";
 import { getGithubOnboardingPageData } from "~/server/projects";
@@ -30,6 +31,11 @@ export default async function GithubOnboardingPage({
       description="Initialize secure GitHub identity mapping and app installation for repository access."
       title="GitHub Onboarding"
     >
+      <GithubOnboardingToast
+        errorMessage={errorMessage}
+        successMessage={successMessage}
+      />
+
       <Alert className="rounded-none border-primary/20 bg-primary/5">
         <Github className="h-4 w-4 text-primary" />
         <AlertTitle className="text-[10px] font-bold uppercase tracking-widest">
@@ -148,24 +154,6 @@ export default async function GithubOnboardingPage({
         </div>
 
         <div className="space-y-6">
-          {errorMessage && (
-            <Alert variant="destructive" className="rounded-none border-destructive/20 bg-destructive/10">
-              <AlertTitle className="text-[10px] font-bold uppercase tracking-widest">System Error</AlertTitle>
-              <AlertDescription className="text-xs font-medium uppercase mt-2 leading-relaxed">
-                {errorMessage}
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {successMessage && (
-            <Alert className="rounded-none border-emerald-500/20 bg-emerald-500/10 text-emerald-500">
-              <AlertTitle className="text-[10px] font-bold uppercase tracking-widest text-emerald-500">Operation Success</AlertTitle>
-              <AlertDescription className="text-xs font-medium uppercase mt-2 leading-relaxed">
-                {successMessage}
-              </AlertDescription>
-            </Alert>
-          )}
-
           <Card className="rounded-none border-border shadow-none bg-card">
             <CardHeader className="border-b border-border pb-6">
               <div className="space-y-1">

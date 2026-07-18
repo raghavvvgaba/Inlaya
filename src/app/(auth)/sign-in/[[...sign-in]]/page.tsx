@@ -15,7 +15,7 @@ export default function SignInPage() {
         appearance={{
           elements: {
             card: "shadow-none",
-            rootBox: "w-full",
+            rootBox: "flex w-full justify-center",
           },
         }}
         path="/sign-in"

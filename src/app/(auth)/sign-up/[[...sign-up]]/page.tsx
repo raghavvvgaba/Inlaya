@@ -15,7 +15,7 @@ export default function SignUpPage() {
         appearance={{
           elements: {
             card: "shadow-none",
-            rootBox: "w-full",
+            rootBox: "flex w-full justify-center",
           },
         }}
         path="/sign-up"
