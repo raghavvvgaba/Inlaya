@@ -6,7 +6,8 @@ RUN corepack enable
 FROM base AS deps
 COPY package.json pnpm-lock.yaml ./
 COPY prisma ./prisma
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    pnpm install --frozen-lockfile --store-dir /pnpm/store
 
 FROM base AS builder
 ENV SKIP_ENV_VALIDATION=1
@@ -16,7 +17,6 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/generated ./generated
 COPY . .
 RUN pnpm build
-RUN pnpm prune --prod --ignore-scripts
 
 FROM base AS runner
 ENV NODE_ENV=production

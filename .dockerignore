@@ -1,6 +1,7 @@
 .git
 .next
 node_modules
+e2b-template/node_modules
 generated
 
 .env
