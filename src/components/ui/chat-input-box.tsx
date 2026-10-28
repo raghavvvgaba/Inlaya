@@ -78,8 +78,8 @@ export function ChatInputBox({
           }
         }}
         placeholder={
-          mode === "plan"
-            ? "Ask about the project or plan a change."
+          mode === "ask"
+            ? "Ask about the project or how a change would work."
             : "Describe what you want Inlaya to change."
         }
         value={instruction}
@@ -93,9 +93,9 @@ export function ChatInputBox({
             className="flex h-7 items-center border border-[#171713]/15 bg-[#e8e2d5]/70 p-0.5 dark:border-[#fffaf0]/15 dark:bg-white/5"
             role="group"
           >
-            {(["plan", "build"] as const).map((agentMode) => {
+            {(["ask", "build"] as const).map((agentMode) => {
               const selected = mode === agentMode;
-              const Icon = agentMode === "plan" ? ListTree : Hammer;
+              const Icon = agentMode === "ask" ? ListTree : Hammer;
 
               return (
                 <button

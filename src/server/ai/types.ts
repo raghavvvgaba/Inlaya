@@ -1,5 +1,20 @@
 import "server-only";
 
+export type AIReasoningState =
+  | {
+      details: unknown[];
+      type: "details";
+    }
+  | {
+      text: string;
+      type: "text";
+    };
+
+export type AIReasoningConfig = {
+  enabled?: boolean;
+  exclude?: boolean;
+};
+
 export type AIMessage =
   | {
       content: string;
@@ -9,6 +24,8 @@ export type AIMessage =
   | {
       content: string;
       name?: string;
+      reasoning?: string;
+      reasoning_details?: unknown[];
       role: "assistant";
       tool_calls?: AIToolCall[];
     }
@@ -67,6 +84,7 @@ export type AIGenerateTextInput = {
   messages: AIMessage[];
   model?: string;
   onTextDelta?: (delta: string) => Promise<void> | void;
+  reasoning?: AIReasoningConfig;
   responseFormat?:
     | {
         jsonSchema: AIJsonSchema;
@@ -83,6 +101,7 @@ export type AIGenerateTextInput = {
 
 export type AIGenerateTextResult = {
   model: string;
+  reasoning?: AIReasoningState;
   text: string;
   timeToFirstOutputMs?: number;
   toolCalls?: AIToolCall[];

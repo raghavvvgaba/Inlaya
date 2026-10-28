@@ -2,6 +2,7 @@ import "server-only";
 
 import { env } from "~/env";
 import {
+  getModelReasoningRequestConfig,
   supportsStrictToolArguments,
   toOpenRouterModelId,
 } from "~/lib/agent-models";
@@ -9,6 +10,7 @@ import type {
   AIGenerateTextInput,
   AIGenerateTextResult,
   AIProvider,
+  AIReasoningState,
   AIToolCall,
   AIUsage,
 } from "~/server/ai/types";
@@ -26,6 +28,8 @@ type OpenRouterResponse = {
   choices?: Array<{
     message?: {
       content?: OpenRouterMessageContent;
+      reasoning?: string;
+      reasoning_details?: unknown[];
       tool_calls?: Array<{
         function?: {
           arguments?: string;
@@ -117,6 +121,28 @@ function getToolCalls(response: OpenRouterResponse): AIToolCall[] {
       } satisfies AIToolCall,
     ];
   });
+}
+
+function getReasoningState(
+  response: OpenRouterResponse,
+): AIReasoningState | undefined {
+  const message = response.choices?.[0]?.message;
+
+  if (Array.isArray(message?.reasoning_details)) {
+    return {
+      details: message.reasoning_details,
+      type: "details",
+    };
+  }
+
+  if (typeof message?.reasoning === "string") {
+    return {
+      text: message.reasoning,
+      type: "text",
+    };
+  }
+
+  return undefined;
 }
 
 function getUsage(response: OpenRouterResponse): AIUsage | undefined {
@@ -310,6 +336,8 @@ async function generateText(
           data_collection: "deny",
           require_parameters: true,
         },
+        reasoning:
+          input.reasoning ?? getModelReasoningRequestConfig(model),
         response_format:
           input.responseFormat?.type === "json_schema"
             ? {
@@ -367,6 +395,7 @@ async function generateText(
   }
 
   const text = getResponseText(data);
+  const reasoning = getReasoningState(data);
   const toolCalls = getToolCalls(data);
   const usage = getUsage(data);
 
@@ -376,6 +405,7 @@ async function generateText(
 
   return {
     model: data.model ?? model,
+    ...(reasoning ? { reasoning } : {}),
     text,
     ...(toolCalls.length > 0 ? { toolCalls } : {}),
     ...(usage ? { usage } : {}),

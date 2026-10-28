@@ -67,7 +67,7 @@ const SAFE_TOOL_SPAN_ERROR_CODES = new Set([
   "unknown_tool",
   "unknown_tool_error",
   "write_batch_limit_exceeded",
-  "write_not_allowed_in_plan_mode",
+  "write_not_allowed_in_ask_mode",
 ]);
 
 // Controller codes can fall back to raw error messages. Only export known codes;

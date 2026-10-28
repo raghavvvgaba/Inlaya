@@ -61,6 +61,7 @@ function getRequestBody(fetchMock: ReturnType<typeof vi.fn>) {
   const request = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
   return JSON.parse(String(request?.body)) as {
     provider?: { require_parameters?: boolean };
+    reasoning?: { enabled?: boolean; exclude?: boolean };
     tools?: Array<{ function: { strict?: boolean } }>;
   };
 }
@@ -84,7 +85,36 @@ describe("AI provider tool strictness", () => {
 
     const body = getRequestBody(fetchMock);
     expect(body.provider?.require_parameters).toBe(true);
+    expect(body.reasoning).toEqual({ enabled: true, exclude: false });
     expect(body.tools?.[0]?.function.strict).toBe(true);
+  });
+
+  it("keeps default-on reasoning models on their OpenRouter defaults", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      successfulResponse("moonshotai/kimi-k2.7-code"),
+    );
+
+    await openRouterAiProvider.generateText(buildInput("kimi-k2.7-code"));
+
+    expect(getRequestBody(fetchMock).reasoning).toBeUndefined();
+  });
+
+  it("honors an explicit provider-neutral reasoning configuration", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      successfulResponse("moonshotai/kimi-k2.7-code"),
+    );
+
+    await openRouterAiProvider.generateText({
+      ...buildInput("kimi-k2.7-code"),
+      reasoning: { enabled: true, exclude: false },
+    });
+
+    expect(getRequestBody(fetchMock).reasoning).toEqual({
+      enabled: true,
+      exclude: false,
+    });
   });
 
   it("omits strict tools for unknown OpenRouter models", async () => {
@@ -95,6 +125,7 @@ describe("AI provider tool strictness", () => {
 
     const body = getRequestBody(fetchMock);
     expect(body.provider?.require_parameters).toBe(true);
+    expect(body.reasoning).toBeUndefined();
     expect(body.tools?.[0]?.function.strict).toBeUndefined();
   });
 });

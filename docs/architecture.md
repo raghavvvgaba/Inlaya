@@ -111,9 +111,9 @@ The issue page loads saved messages on render, and the workspace uses them as th
 
 ## Agent Modes
 
-Each issue-agent request carries an ephemeral `plan` or `build` mode. Plan is the UI and API default and limits the model to read-only discovery tools. Build includes file-editing tools. The agent loop also checks mode immediately before tool execution, so a Plan-mode write cannot reach the sandbox provider even if the model requests it.
+Each issue-agent request carries an ephemeral `ask` or `build` mode. Build is the UI and API default and includes file-editing tools. Ask limits the model to read-only discovery tools. The agent loop also checks mode immediately before tool execution, so an Ask-mode write cannot reach the sandbox provider even if the model requests it. The API temporarily maps the legacy `plan` value to `ask` for compatibility.
 
-The mode is included in the model prompt and run logs. Plan-mode implementation requests should return an actionable plan and tell the user to switch to Build; the application never changes modes automatically.
+The mode is included in the model prompt and run logs. Ask-mode implementation requests should explain what would need to change and tell the user to switch to Build; the application never changes modes automatically.
 
 ## Documentation Boundaries
 

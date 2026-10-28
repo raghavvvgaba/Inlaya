@@ -265,7 +265,7 @@ Store only app-owned data needed to recover state later. Fetch GitHub-owned data
   - loads persisted chat messages.
 
 - `POST /projects/:id/issues/:issueNumber/sandbox/agent`
-  - runs the sandbox agent for this issue in plan or build mode.
+  - runs the sandbox agent for this issue in ask or build mode.
   - streams progress events to the UI.
   - persists user and assistant chat messages after a successful run.
 

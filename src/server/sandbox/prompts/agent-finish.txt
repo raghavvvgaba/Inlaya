@@ -1,5 +1,22 @@
 Do not call any tools.
 {{MODE_FINISH_INSTRUCTION}}
+
+Write the message for a non-technical user:
+- Lead with the outcome. For a successfully completed change, begin with "Done."
+- Describe what visibly changed and where the user can see it, using the user's own words when possible.
+- Keep it short and easy to scan. Prefer two to five short sentences. Use a short list only when it makes the result clearer.
+- Do not mention file paths, code identifiers, components, arrays, tools, commands, tests, servers, or other implementation details unless the user explicitly asked for technical details or one is essential to explain why the work is blocked.
+- Do not enumerate files changed or narrate how the code was edited.
+- Mention verification only when it is useful. Translate it into plain language, such as "I checked that the update is in place." If ideal verification was not possible, explain the practical limitation without developer jargon, such as "The change is ready, but I couldn't open the live preview to visually check it."
+- Do not claim a visible result, verification, or completed change unless it actually happened.
+- When blocked, explain the problem plainly and use clarificationQuestion for one direct question that would unblock the work.
+
+Good completed message:
+"Done. I reordered the projects to Chess, Mosaic, and HealSync. The new order is now used on both the home page and the Projects page. You can check it in the live preview."
+
+Avoid a technical handoff like:
+"Updated the projects array in src/data/projects.js and filtered ProjectsPage.jsx. The preview server is running and the content check passed."
+
 Return the final result as JSON only.
 Use this shape: {"status":"completed"|"blocked","message":"...","clarificationQuestion":"optional"}
 Do not include markdown fences or any extra prose.

@@ -1017,7 +1017,7 @@ describe("runSandboxAgent", () => {
     );
   });
 
-  it("denies write tools in plan mode and tells the model to hand off to build", async () => {
+  it("denies write tools in ask mode and tells the model to hand off to build", async () => {
     generateTextMock
       .mockResolvedValueOnce(
         createModelResponse({
@@ -1029,21 +1029,20 @@ describe("runSandboxAgent", () => {
                 content: "# Updated project",
                 path: "README.md",
               },
-              "call-plan-write",
+              "call-ask-write",
             ),
           ],
         }),
       )
       .mockResolvedValueOnce(
         createModelResponse({
-          text: "The implementation plan is ready. Switch to Build mode to apply it.",
+          text: "I can explain the change. Switch to Build mode to apply it.",
         }),
       )
       .mockResolvedValueOnce(
         createModelResponse({
           text: JSON.stringify({
-            message:
-              "The README update is planned. Switch to Build mode to apply it.",
+            message: "The README would be updated in Build mode.",
             status: "completed",
           }),
         }),
@@ -1051,7 +1050,7 @@ describe("runSandboxAgent", () => {
 
     const result = await runSandboxAgent({
       ...baseInput,
-      mode: "plan",
+      mode: "ask",
       userInstruction: "Update the README with an accurate project summary.",
     });
     const firstModelCall = getModelCall(0);
@@ -1070,7 +1069,7 @@ describe("runSandboxAgent", () => {
     expect(writeToolExecuteMock).not.toHaveBeenCalled();
     expect(replaceToolExecuteMock).not.toHaveBeenCalled();
     expect(toolResult).toMatchObject({
-      code: "write_not_allowed_in_plan_mode",
+      code: "write_not_allowed_in_ask_mode",
       ok: false,
       retryable: true,
       tool: "write_file",
@@ -1078,12 +1077,12 @@ describe("runSandboxAgent", () => {
     expect(toolResult.message).toContain("switch to Build mode");
     expect(result).toMatchObject({
       filesTouched: [],
-      message: "The README update is planned. Switch to Build mode to apply it.",
+      message: "The README would be updated in Build mode.",
       status: "completed",
     });
   });
 
-  it("answers a project question in plan mode without suggesting a mode change", async () => {
+  it("answers a project question in ask mode without suggesting a mode change", async () => {
     generateTextMock
       .mockResolvedValueOnce(
         createModelResponse({
@@ -1110,7 +1109,7 @@ describe("runSandboxAgent", () => {
 
     const result = await runSandboxAgent({
       ...baseInput,
-      mode: "plan",
+      mode: "ask",
       userInstruction: "What is this project?",
     });
 
@@ -1126,10 +1125,64 @@ describe("runSandboxAgent", () => {
     expect(result.message).not.toContain("Build mode");
   });
 
-  it("accepts a valid two-call read-only batch and appends both tool results", async () => {
+  it("replays plaintext reasoning with a single tool call", async () => {
     generateTextMock
       .mockResolvedValueOnce(
         createModelResponse({
+          reasoning: {
+            text: "I should inspect the requested file before answering.",
+            type: "text",
+          },
+          text: "I'll inspect the file.",
+          toolCalls: [
+            createToolCall("read_file", { path: "src/file.ts" }, "call-read"),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({ text: "The file is already correct." }),
+      )
+      .mockResolvedValueOnce(
+        createModelResponse({
+          text: JSON.stringify({
+            message: "The file is already correct.",
+            status: "completed",
+          }),
+        }),
+      );
+
+    await runSandboxAgent(baseInput);
+
+    const nextMessages = getModelCall(1)?.messages ?? [];
+    const assistantMessage = getAssistantToolCallMessage(nextMessages);
+    expect(assistantMessage).toMatchObject({
+      content: "I'll inspect the file.",
+      reasoning: "I should inspect the requested file before answering.",
+      role: "assistant",
+      tool_calls: [expect.objectContaining({ id: "call-read" })],
+    });
+    expect("reasoning_details" in (assistantMessage ?? {})).toBe(false);
+    expect(getToolMessages(nextMessages)).toEqual([
+      expect.objectContaining({
+        role: "tool",
+        tool_call_id: "call-read",
+      }),
+    ]);
+  });
+
+  it("accepts a valid two-call read-only batch and appends both tool results", async () => {
+    const reasoningDetails = [
+      {
+        data: "opaque-batch-reasoning",
+        format: "openrouter-test-v1",
+        id: "reasoning-batch",
+        type: "reasoning.encrypted",
+      },
+    ];
+    generateTextMock
+      .mockResolvedValueOnce(
+        createModelResponse({
+          reasoning: { details: reasoningDetails, type: "details" },
           text: "I'll inspect the page and the data file.",
           toolCalls: [
             createToolCall("list_directory", { path: "src/pages" }, "call-list"),
@@ -1166,6 +1219,7 @@ describe("runSandboxAgent", () => {
     expect(readToolExecuteMock).toHaveBeenCalledTimes(1);
     expect(assistantToolCallMessage).toMatchObject({
       content: "I'll inspect the page and the data file.",
+      reasoning_details: reasoningDetails,
       role: "assistant",
       tool_calls: [
         expect.objectContaining({ id: "call-list" }),

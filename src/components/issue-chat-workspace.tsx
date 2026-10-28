@@ -123,7 +123,7 @@ export function IssueChatWorkspace({
   const router = useRouter();
   const [messages, setMessages] = useState(initialMessages);
   const [instruction, setInstruction] = useState(initialInstruction);
-  const [agentMode, setAgentMode] = useState<SandboxAgentMode>("plan");
+  const [agentMode, setAgentMode] = useState<SandboxAgentMode>("build");
   const [isRunning, setIsRunning] = useState(false);
   const [isClearingChat, setIsClearingChat] = useState(false);
   const [isClearChatDialogOpen, setIsClearChatDialogOpen] = useState(false);

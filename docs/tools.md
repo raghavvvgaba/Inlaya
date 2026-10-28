@@ -6,10 +6,10 @@ This file is the current source of truth for tool behavior that the app and futu
 
 ## Agent Modes
 
-- `plan` is read-only and exposes `glob_files`, `list_directory`, `read_file`, and `search_code`.
+- `ask` is read-only and exposes `glob_files`, `list_directory`, `read_file`, and `search_code`.
 - `build` exposes all sandbox agent tools, including `replace_in_file` and `write_file`.
-- unavailable tools are omitted from the model request, and write attempts are independently rejected at runtime in Plan mode.
-- missing API mode defaults to `plan`; mode selection is not persisted across page loads.
+- unavailable tools are omitted from the model request, and write attempts are independently rejected at runtime in Ask mode.
+- missing API mode defaults to `build`; mode selection is not persisted across page loads.
 
 ## `glob_files`
 

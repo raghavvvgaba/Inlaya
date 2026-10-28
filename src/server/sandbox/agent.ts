@@ -12,6 +12,7 @@ import { z } from "zod";
 import type {
   AIUsage,
   AIMessage,
+  AIReasoningState,
   AIToolChoice,
   AIToolCall,
   AIGenerateTextResult,
@@ -413,10 +414,10 @@ function buildAgentSystemPrompt(mode: SandboxAgentMode) {
     AGENT_MODE: mode,
     MAX_READ_ONLY_TOOL_CALLS: String(MAX_READ_ONLY_TOOL_CALLS),
     MODE_INSTRUCTIONS:
-      mode === "plan"
+      mode === "ask"
         ? [
-            "Plan mode is read-only. Use repository tools to answer questions, investigate, review, or prepare an actionable implementation plan.",
-            "If the user requests implementation, do not claim to have changed files. Finish with the plan and tell them to switch to Build mode when they want it applied.",
+            "Ask mode is read-only. Use repository tools to answer questions, investigate, review, or explain how a change would work.",
+            "If the user requests implementation, do not claim to have changed files. Explain what would need to change and tell them to switch to Build mode when they want it applied.",
             "Never switch modes yourself.",
           ].join(" ")
         : [
@@ -429,8 +430,8 @@ function buildAgentSystemPrompt(mode: SandboxAgentMode) {
 function buildAgentFinishPrompt(mode: SandboxAgentMode) {
   return formatPromptTemplate(AGENT_FINISH_PROMPT_TEMPLATE, {
     MODE_FINISH_INSTRUCTION:
-      mode === "plan"
-        ? "If the user requested implementation, summarize the actionable plan and tell them to switch to Build mode to apply it. Do not claim files were changed."
+      mode === "ask"
+        ? "If the user requested implementation, explain what would need to change and tell them to switch to Build mode to apply it. Do not claim files were changed."
         : "Report only changes that were actually completed.",
   });
 }
@@ -617,20 +618,20 @@ function buildSkippedWriteResult(
   };
 }
 
-function buildPlanModeWriteFailureResult(
+function buildAskModeWriteFailureResult(
   tool: SandboxAgentToolName,
   argumentsValue: Record<string, unknown>,
 ): AgentToolFailure {
-  const code = "write_not_allowed_in_plan_mode";
+  const code = "write_not_allowed_in_ask_mode";
   const message =
-    "This workspace is in Plan mode. File edits are unavailable. Do not retry the write. Continue with read-only analysis and tell the user to switch to Build mode when they want the changes applied.";
+    "This workspace is in Ask mode. File edits are unavailable. Do not retry the write. Continue with read-only analysis and tell the user to switch to Build mode when they want the changes applied.";
 
   return {
     argumentValidationFailure: false,
     code,
     latestObservation: formatToolFeedback(tool, message),
     message,
-    recentEvent: `${tool} was denied because Plan mode is read-only.`,
+    recentEvent: `${tool} was denied because Ask mode is read-only.`,
     status: "tool_failure",
     tool,
     toolMessageContent: buildToolFailureMessageContent({
@@ -1096,7 +1097,7 @@ async function callAgentToolTurn(
   toolChoice: AIToolChoice = "auto",
 ): Promise<AIGenerateTextResult> {
   const tools =
-    mode === "plan"
+    mode === "ask"
       ? sandboxAgentModelTools.filter((tool) =>
           READ_ONLY_TOOL_NAMES.has(tool.function.name as SandboxAgentToolName),
         )
@@ -1191,8 +1192,8 @@ async function executeToolCallCore(
 
   const toolName = toolCall.function.name;
 
-  if (mode === "plan" && WRITE_TOOL_NAMES.has(toolName)) {
-    return buildPlanModeWriteFailureResult(
+  if (mode === "ask" && WRITE_TOOL_NAMES.has(toolName)) {
+    return buildAskModeWriteFailureResult(
       toolName,
       parseToolCallArguments(toolCall),
     );
@@ -1437,9 +1438,14 @@ function appendToolMessages(
     toolMessageContent: string;
   }>,
   assistantContent: string,
+  reasoning?: AIReasoningState,
 ) {
   state.transcript.push({
     content: assistantContent,
+    ...(reasoning?.type === "details"
+      ? { reasoning_details: reasoning.details }
+      : {}),
+    ...(reasoning?.type === "text" ? { reasoning: reasoning.text } : {}),
     role: "assistant",
     tool_calls: toolCalls,
   });
@@ -2116,6 +2122,7 @@ async function runSandboxAgentLoop(
           toolMessageContent: item.result.toolMessageContent,
         })),
         modelResponse.text,
+        modelResponse.reasoning,
       );
       state.latestObservation = buildBatchObservation(rejectedTools);
       pushRecentEvent(state, `Rejected tool batch: ${toolTurn.reason}`);
@@ -2190,6 +2197,7 @@ async function runSandboxAgentLoop(
           },
         ],
         modelResponse.text,
+        modelResponse.reasoning,
       );
       state.latestObservation = toolResult.latestObservation;
 
@@ -2319,6 +2327,7 @@ async function runSandboxAgentLoop(
           : [],
       ),
       modelResponse.text,
+      modelResponse.reasoning,
     );
     state.latestObservation = batchResult.latestObservation;
 

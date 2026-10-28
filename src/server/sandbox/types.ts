@@ -191,7 +191,7 @@ export type SandboxAgentStatus =
   | "blocked"
   | "failed";
 
-export type SandboxAgentMode = "build" | "plan";
+export type SandboxAgentMode = "ask" | "build";
 
 export type SandboxAgentConversationMessage = {
   content: string;

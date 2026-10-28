@@ -152,7 +152,7 @@ export async function POST(
     : DEFAULT_AGENT_MODEL;
 
   if (!mode) {
-    return jsonFailure("Choose either Plan or Build mode.", 400);
+    return jsonFailure("Choose either Ask or Build mode.", 400);
   }
 
   if (!sessionId) {
