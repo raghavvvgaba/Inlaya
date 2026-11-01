@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   title: "Inlaya | Fit the right change into place",
   description:
     "Turn GitHub issues into reviewed pull requests with an AI agent, isolated sandboxes, and live previews.",
-  icons: [{ rel: "icon", url: "/favicon.ico" }],
+  icons: [{ rel: "icon", url: "/inlaya-logo.svg", type: "image/svg+xml" }],
 };
 
 export default function RootLayout({

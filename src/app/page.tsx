@@ -220,7 +220,7 @@ export default function HomePage() {
                 stronger, richer, and whole.
               </p>
               <div className="mt-10 flex max-w-3xl items-start gap-4 border-l-2 border-[#f04f2f] pl-5 text-sm leading-7 text-[#b8b4aa] sm:text-base">
-                <InlayaMark className="mt-1 h-5 w-5" />
+                <InlayaMark className="mt-1 h-5 w-5 text-[#fffaf0]" />
                 <p>
                   That is how Inlaya works: it brings the issue, the code, and the right
                   change together, then fits the result cleanly back into your repository.
@@ -308,7 +308,7 @@ export default function HomePage() {
 
         <section className="border-y border-[#171713]/15 bg-[#f04f2f] px-5 py-20 text-[#171713] dark:border-[#fffaf0]/15 sm:px-8 sm:py-28 lg:px-12">
           <div className="mx-auto flex max-w-[1100px] flex-col items-center text-center">
-            <InlayaMark className="h-10 w-10" />
+            <InlayaMark className="h-10 w-10 [--inlaya-accent:#fffaf0]" />
             <p className="mt-8 text-[11px] font-semibold uppercase tracking-[0.22em]">
               The next change starts here
             </p>
