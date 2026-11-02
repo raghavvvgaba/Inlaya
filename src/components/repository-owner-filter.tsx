@@ -24,40 +24,36 @@ export function RepositoryOwnerFilter({
   selectedOwner,
 }: RepositoryOwnerFilterProps) {
   return (
-    <div className="flex flex-col gap-2 text-xs font-medium text-muted-foreground">
-      <span className="text-[10px] font-bold uppercase tracking-widest">
-        Owner
-      </span>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            className="h-10 min-w-56 justify-between rounded-none border-border px-3 text-sm font-medium normal-case tracking-normal"
-            variant="outline"
-          >
-            <span className="truncate">{selectedOwner}</span>
-            <ChevronDown className="ml-3 h-4 w-4 text-muted-foreground" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="rounded-none">
-          <DropdownMenuLabel className="text-[10px] font-bold uppercase tracking-widest">
-            Repository owner
-          </DropdownMenuLabel>
-          <DropdownMenuRadioGroup
-            onValueChange={onOwnerChange}
-            value={selectedOwner}
-          >
-            {owners.map((owner) => (
-              <DropdownMenuRadioItem
-                className="rounded-none"
-                key={owner}
-                value={owner}
-              >
-                {owner}
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          aria-label={`Repository owner: ${selectedOwner}`}
+          className="h-10 w-full justify-between rounded-none border-border bg-card px-3 text-sm font-medium sm:w-52"
+          variant="outline"
+        >
+          <span className="truncate">{selectedOwner}</span>
+          <ChevronDown className="ml-2 h-4 w-4 shrink-0 text-muted-foreground" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="min-w-52 rounded-none">
+        <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">
+          Repository owner
+        </DropdownMenuLabel>
+        <DropdownMenuRadioGroup
+          onValueChange={onOwnerChange}
+          value={selectedOwner}
+        >
+          {owners.map((owner) => (
+            <DropdownMenuRadioItem
+              className="rounded-none"
+              key={owner}
+              value={owner}
+            >
+              {owner}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

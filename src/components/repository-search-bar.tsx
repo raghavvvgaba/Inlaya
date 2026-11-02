@@ -1,20 +1,31 @@
 "use client";
 
 import Link from "next/link";
-import { Github, Loader2, Plus, Search, X } from "lucide-react";
+import {
+  ArrowUpRight,
+  Check,
+  ExternalLink,
+  Github,
+  Loader2,
+  Lock,
+  Plus,
+  Search,
+  SearchX,
+  X,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import type { RepoImportItem } from "~/lib/github-types";
-import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
 
 type RepositorySearchBarProps = {
   disabled: boolean;
   githubAppInstallUrl: string;
   importedProjects: Record<string, string>;
+  /** Rendered before the search input, e.g. an owner picker. */
+  leading?: ReactNode;
   onGrantAccess: () => void;
   repositories: RepoImportItem[];
 };
@@ -23,6 +34,7 @@ export function RepositorySearchBar({
   repositories,
   importedProjects,
   githubAppInstallUrl,
+  leading,
   onGrantAccess,
   disabled,
 }: RepositorySearchBarProps) {
@@ -88,146 +100,154 @@ export function RepositorySearchBar({
     : repositories;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1">
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        {leading}
+        <label className="relative block flex-1">
+          <span className="sr-only">Search repositories</span>
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            className="h-10 rounded-none border-border bg-input/50 pl-10 pr-10 text-sm"
+          <input
+            className="h-10 w-full rounded-none border border-border bg-card pl-9 pr-9 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-[#f04f2f] focus-visible:ring-1 focus-visible:ring-[#f04f2f] disabled:opacity-50 [&::-webkit-search-cancel-button]:appearance-none"
             disabled={disabled}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(event) => setQuery(event.target.value)}
             placeholder={
-              disabled
-                ? "No repositories available to search"
-                : "Search repositories..."
+              disabled ? "No repositories to search" : "Search repositories"
             }
+            type="search"
             value={query}
           />
-          {query && (
+          {query ? (
             <button
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Clear search"
+              className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center text-muted-foreground transition-colors hover:text-[#f04f2f]"
               onClick={() => setQuery("")}
               type="button"
             >
-              <X className="h-4 w-4" />
+              <X className="h-3.5 w-3.5" />
             </button>
-          )}
-        </div>
-        <Badge className="h-10 shrink-0 bg-muted text-muted-foreground border-border rounded-none text-[10px] font-bold uppercase tracking-widest px-3 py-1">
-          {normalizedQuery
-            ? `${filtered.length} of ${repositories.length} Repositories`
-            : `${repositories.length} Repositories`}
-        </Badge>
+          ) : null}
+        </label>
       </div>
 
-      <div className="grid gap-px bg-border border border-border">
-        {filtered.length === 0 && (
-          <div className="bg-card py-12 text-center">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              {normalizedQuery
-                ? "No Repositories Match Your Search"
-                : "No Repositories Found"}
-            </p>
-            <p className="mt-2 text-[10px] text-muted-foreground uppercase">
-              {normalizedQuery
-                ? "Try a different search term."
-                : "Refresh access or choose another owner."}
-            </p>
-          </div>
-        )}
+      <p aria-live="polite" className="text-xs text-muted-foreground">
+        {normalizedQuery
+          ? `${filtered.length} of ${repositories.length} repositories match`
+          : `${repositories.length} ${repositories.length === 1 ? "repository" : "repositories"}`}
+      </p>
 
-        {filtered.map((repo) => {
-          const importedProjectId =
-            importedProjects[repo.fullName.toLowerCase()];
+      {filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center border border-dashed border-border bg-card py-12 text-center">
+          <SearchX className="mb-4 h-8 w-8 text-muted-foreground/40" />
+          <p className="text-sm font-medium">
+            {normalizedQuery
+              ? `No repositories match “${query.trim()}”`
+              : "No repositories for this owner"}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {normalizedQuery
+              ? "Try a different name."
+              : "Choose another owner, or give Inlaya access and refresh."}
+          </p>
+        </div>
+      ) : (
+        <div className="grid gap-px border border-border bg-border">
+          {filtered.map((repo) => {
+            const importedProjectId =
+              importedProjects[repo.fullName.toLowerCase()];
+            const isLocked = !importedProjectId && repo.status !== "ready";
 
-          return (
-            <div
-              className="flex flex-col gap-4 bg-card p-4 md:flex-row md:items-center md:justify-between group transition hover:bg-muted/50"
-              key={repo.id}
-            >
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center bg-muted border border-border group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                    <Github className="h-4 w-4" />
-                  </div>
-                  <h3 className="text-sm font-bold tracking-tight uppercase">
-                    {repo.fullName}
-                  </h3>
-                  <Badge
-                    className={`rounded-none text-[10px] font-bold uppercase tracking-widest ${
-                      importedProjectId
-                        ? "bg-primary/10 text-primary border-primary/20"
-                        : repo.status === "ready"
-                          ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
-                          : "bg-amber-500/10 text-amber-500 border-amber-500/20"
+            return (
+              <div
+                className="group flex items-center justify-between gap-4 bg-card px-4 py-3 transition-colors hover:bg-muted/40"
+                key={repo.id}
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <div
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center transition-colors ${
+                      isLocked
+                        ? "bg-muted text-muted-foreground"
+                        : "bg-[#171713] text-[#fffaf0] group-hover:bg-[#f04f2f] dark:bg-[#fffaf0] dark:text-[#171713] dark:group-hover:bg-[#f04f2f] dark:group-hover:text-white"
                     }`}
                   >
-                    {importedProjectId
-                      ? "IMPORTED"
-                      : repo.status === "ready"
-                        ? "READY"
-                        : "LOCKED"}
-                  </Badge>
-                  {repo.private && (
-                    <Badge
+                    {isLocked ? (
+                      <Lock className="h-3.5 w-3.5" />
+                    ) : (
+                      <Github className="h-3.5 w-3.5" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm">
+                      <span className="text-muted-foreground">
+                        {repo.owner}/
+                      </span>
+                      <span className="font-medium">{repo.name}</span>
+                    </p>
+                    <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                      {importedProjectId ? (
+                        <>
+                          <Check className="h-3 w-3 text-emerald-500" />
+                          Imported
+                        </>
+                      ) : isLocked ? (
+                        "Needs GitHub access"
+                      ) : (
+                        "Ready to import"
+                      )}
+                      {repo.private ? <span>· Private</span> : null}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex shrink-0">
+                  {importedProjectId ? (
+                    <Button
+                      asChild
+                      className="h-9 rounded-none px-4 text-xs font-semibold"
                       variant="outline"
-                      className="border-border text-[10px] font-bold uppercase tracking-widest rounded-none text-muted-foreground"
                     >
-                      PRIVATE
-                    </Badge>
+                      <Link href={`/projects/${importedProjectId}`}>
+                        Open
+                        <ArrowUpRight className="h-3.5 w-3.5" />
+                      </Link>
+                    </Button>
+                  ) : repo.status === "ready" ? (
+                    <Button
+                      className="h-9 rounded-none px-4 text-xs font-semibold hover:bg-[#f04f2f] hover:text-white"
+                      disabled={disabled || isImporting}
+                      onClick={() =>
+                        handleImport(repo.owner, repo.name, repo.fullName)
+                      }
+                    >
+                      {importingRepo === repo.fullName ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Plus className="h-3.5 w-3.5" />
+                      )}
+                      {importingRepo === repo.fullName ? "Importing…" : "Import"}
+                    </Button>
+                  ) : (
+                    <Button
+                      asChild
+                      className="h-9 rounded-none px-4 text-xs font-semibold"
+                      variant="outline"
+                    >
+                      <a
+                        href={githubAppInstallUrl}
+                        onClick={onGrantAccess}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        Give access
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    </Button>
                   )}
                 </div>
               </div>
-
-              <div className="flex shrink-0">
-                {importedProjectId ? (
-                  <Button
-                    asChild
-                    variant="outline"
-                    className="border-border font-bold uppercase text-[10px] tracking-widest h-10 rounded-none px-6"
-                  >
-                    <Link href={`/projects/${importedProjectId}`}>
-                      Open Project
-                    </Link>
-                  </Button>
-                ) : repo.status === "ready" ? (
-                  <Button
-                    className="bg-primary text-primary-foreground font-bold uppercase text-[10px] tracking-widest h-10 rounded-none px-8"
-                    disabled={disabled || isImporting}
-                    onClick={() =>
-                      handleImport(repo.owner, repo.name, repo.fullName)
-                    }
-                  >
-                    {importingRepo === repo.fullName ? (
-                      <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Plus className="mr-2 h-3.5 w-3.5" />
-                    )}
-                    {importingRepo === repo.fullName
-                      ? "Importing..."
-                      : "Import Repository"}
-                  </Button>
-                ) : (
-                  <Button
-                    asChild
-                    variant="outline"
-                    className="border-amber-500/20 text-amber-500 hover:bg-amber-500/10 font-bold uppercase text-[10px] tracking-widest h-10 rounded-none px-6"
-                  >
-                    <a
-                      href={githubAppInstallUrl}
-                      onClick={onGrantAccess}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      Unlock Access
-                    </a>
-                  </Button>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

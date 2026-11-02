@@ -101,11 +101,30 @@ export async function listImportedProjectsForUser(userId: string) {
 
 export async function getProjectsPageData(userId: string) {
   const [projects, githubStatus] = await Promise.all([
-    listProjectsForUser(userId),
+    db.project.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      include: {
+        _count: { select: { chatSessions: true } },
+        // Latest agent run, shown on the card as "last worked on".
+        agentRuns: {
+          orderBy: { startedAt: "desc" },
+          select: { issueNumber: true, issueTitle: true, startedAt: true },
+          take: 1,
+        },
+      },
+    }),
     getGithubConnectionStatus(userId),
   ]);
 
-  return { githubStatus, projects };
+  return {
+    githubStatus,
+    projects: projects.map(({ _count, agentRuns, ...project }) => ({
+      ...project,
+      issuesWorkedOn: _count.chatSessions,
+      lastRun: agentRuns[0] ?? null,
+    })),
+  };
 }
 
 export async function getGithubOnboardingPageData(

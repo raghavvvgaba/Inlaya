@@ -8,17 +8,15 @@ export default function ProjectsLoading() {
         <section className="flex items-end justify-between border-b border-border pb-7">
           <div>
             <Skeleton className="h-14 w-48 rounded-none" />
-            <Skeleton className="mt-3 h-4 w-24 rounded-none" />
+            <Skeleton className="mt-3 h-4 w-64 rounded-none" />
           </div>
           <Skeleton className="h-11 w-44 rounded-none" />
         </section>
 
-        <Skeleton className="h-16 w-full rounded-none" />
-
         <section className="grid gap-4 md:grid-cols-2">
           {Array.from({ length: 4 }).map((_, index) => (
             <Skeleton
-              className="h-[180px] rounded-none"
+              className="h-[133px] rounded-none"
               key={`projects-loading-${index}`}
             />
           ))}

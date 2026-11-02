@@ -58,14 +58,12 @@ export function GithubDisconnectDialog({
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button
-          className="h-7 rounded-none border-destructive/30 px-2.5 text-[10px] font-bold uppercase tracking-widest text-destructive hover:bg-destructive/10"
+        <button
+          className="text-muted-foreground underline-offset-4 transition-colors hover:text-destructive hover:underline"
           type="button"
-          variant="outline"
         >
-          <Unlink className="mr-1.5 h-3 w-3" />
           Disconnect
-        </Button>
+        </button>
       </DialogTrigger>
 
       <DialogContent

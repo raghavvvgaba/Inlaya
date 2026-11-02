@@ -14,11 +14,12 @@ export function ImportGuidePopup() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
-          className="h-8 w-8 rounded-full border-border p-0"
+          aria-label="How importing works"
+          className="h-8 w-8 rounded-none border-border p-0"
           size="icon"
           variant="outline"
         >
-          <HelpCircle className="h-4 w-4 text-muted-foreground" />
+          <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
@@ -28,24 +29,24 @@ export function ImportGuidePopup() {
       >
         <div className="space-y-5">
           <div>
-            <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-              Import Guide
+            <h3 className="text-xs font-semibold text-foreground">
+              How importing works
             </h3>
             <p className="mt-2 text-xs leading-relaxed text-foreground/80">
-              Repositories marked Ready can be imported. If a repository is
-              locked, grant the GitHub App access and refresh the list.
+              Repositories marked Ready to import can be imported now. For one
+              that needs access, give Inlaya access on GitHub, then refresh.
             </p>
           </div>
 
           <div>
-            <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-              What shows up here
+            <h3 className="text-xs font-semibold text-foreground">
+              What you see here
             </h3>
             <ul className="mt-2 space-y-1.5">
               {[
                 "Your account repositories are shown by default.",
                 "Use the owner dropdown to view organization repositories.",
-                "Locked repositories need GitHub App access before import.",
+                "Repositories that need access can't be imported until you give it.",
               ].map((item) => (
                 <li
                   className="text-xs leading-relaxed text-foreground/80 flex gap-2"
@@ -59,11 +60,11 @@ export function ImportGuidePopup() {
           </div>
 
           <div>
-            <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-              Next step
+            <h3 className="text-xs font-semibold text-foreground">
+              Next
             </h3>
             <p className="mt-2 text-xs leading-relaxed text-foreground/80">
-              Choose a repository marked Ready, or grant access to a locked one.
+              Import a ready repository, or give access to one that needs it.
             </p>
           </div>
         </div>

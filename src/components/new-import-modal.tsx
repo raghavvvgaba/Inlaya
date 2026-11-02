@@ -10,8 +10,9 @@ import {
   useState,
 } from "react";
 import {
-  Database,
   ExternalLink,
+  FolderGit2,
+  Github,
   Loader2,
   RefreshCw,
   ShieldAlert,
@@ -26,15 +27,16 @@ import {
 import { ImportGuidePopup } from "~/components/import-guide-popup";
 import { RepositoryOwnerFilter } from "~/components/repository-owner-filter";
 import { RepositorySearchBar } from "~/components/repository-search-bar";
-import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
   DialogClose,
   DialogContent,
+  DialogDescription,
   DialogTitle,
   DialogTrigger,
 } from "~/components/ui/dialog";
+import { Skeleton } from "~/components/ui/skeleton";
 
 type NewImportModalProps = {
   defaultOpen?: boolean;
@@ -211,152 +213,147 @@ export function NewImportModal({
     importAccessOpenedRef.current = true;
   }
 
+  const primaryButtonClassName =
+    "h-11 rounded-none px-5 text-sm font-semibold hover:bg-[#f04f2f] hover:text-white";
+
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent
-        className="max-w-4xl gap-0 overflow-hidden rounded-none border-border bg-background p-0 sm:max-w-4xl"
+        className="flex max-h-[85vh] max-w-3xl flex-col gap-0 overflow-hidden rounded-none border-border bg-background p-0 sm:max-w-3xl"
         showCloseButton={false}
       >
-        <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-6">
-          <DialogTitle className="text-sm font-bold uppercase tracking-tight">
-            Import Repository
-          </DialogTitle>
+        <div className="relative flex shrink-0 items-start justify-between gap-4 border-b border-border px-6 pb-5 pt-6">
+          <div>
+            <DialogTitle className="inlaya-display text-3xl font-medium tracking-[-0.045em]">
+              Import a repository
+            </DialogTitle>
+            <DialogDescription className="mt-1 text-sm text-muted-foreground">
+              Pick a repository to work on its open issues.
+            </DialogDescription>
+          </div>
           <DialogClose asChild>
             <button
-              className="text-muted-foreground transition hover:text-foreground"
+              className="flex h-8 w-8 shrink-0 items-center justify-center text-muted-foreground transition-colors hover:text-[#f04f2f]"
               type="button"
             >
               <X className="h-4 w-4" />
               <span className="sr-only">Close</span>
             </button>
           </DialogClose>
+          <div className="absolute bottom-[-1px] left-6 h-px w-14 bg-[#f04f2f]" />
         </div>
 
-        <div className="max-h-[80vh] space-y-6 overflow-y-auto p-6">
+        <div className="min-h-0 flex-1 overflow-y-auto p-6">
           {!data && isLoading ? (
             <LoadingRepositories />
           ) : data?.status === "github_disconnected" ? (
             <ImportState
               action={
-                <Button
-                  asChild
-                  className="h-12 rounded-none px-8 text-[10px] font-bold uppercase tracking-widest"
-                >
-                  <Link href="/onboarding/github">Connect GitHub</Link>
+                <Button asChild className={primaryButtonClassName}>
+                  <Link href="/onboarding/github">
+                    <Github className="h-4 w-4" />
+                    Connect GitHub
+                  </Link>
                 </Button>
               }
               description="Connect your GitHub account before importing repositories."
-              title="GitHub Not Connected"
+              title="GitHub isn't connected"
             />
           ) : data?.status === "session_required" ? (
             <ImportState
               action={
-                <Button
-                  asChild
-                  className="h-12 rounded-none px-8 text-[10px] font-bold uppercase tracking-widest"
-                >
+                <Button asChild className={primaryButtonClassName}>
                   <a href="/api/github/import-session/start">
+                    <Github className="h-4 w-4" />
                     Continue with GitHub
                   </a>
                 </Button>
               }
-              description="Authorize temporary repository access to continue. The session lasts ten minutes."
-              title="Repository Access Required"
+              description="GitHub needs to confirm which repositories Inlaya can list. This access lasts ten minutes."
+              title="Confirm repository access"
             />
           ) : data?.status === "error" ? (
-            <div className="space-y-4">
-              <Alert
-                className="rounded-none border-destructive/20 bg-destructive/10"
-                variant="destructive"
-              >
-                <ShieldAlert className="h-4 w-4 text-destructive" />
-                <AlertTitle className="text-[10px] font-bold uppercase tracking-widest">
-                  Repository Access Error
-                </AlertTitle>
-                <AlertDescription className="mt-2 text-xs font-medium">
-                  {data.message}
-                </AlertDescription>
-              </Alert>
-              <Button
-                className="h-10 rounded-none px-6 text-[10px] font-bold uppercase tracking-widest"
-                disabled={isLoading}
-                onClick={() => void loadData(true)}
-              >
-                {isLoading ? (
-                  <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <RefreshCw className="mr-2 h-3.5 w-3.5" />
-                )}
-                Retry
-              </Button>
-            </div>
-          ) : readyData ? (
-            <>
-              <div className="flex flex-wrap items-center gap-3">
+            <ImportState
+              action={
                 <Button
-                  className="h-12 rounded-none bg-primary-foreground px-8 text-[10px] font-bold uppercase tracking-widest text-primary hover:bg-primary-foreground/90"
+                  className={primaryButtonClassName}
                   disabled={isLoading}
                   onClick={() => void loadData(true)}
                 >
                   {isLoading ? (
-                    <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    <RefreshCw className="mr-2 h-3.5 w-3.5" />
+                    <RefreshCw className="h-4 w-4" />
                   )}
-                  {isLoading ? "Refreshing..." : "Refresh Repositories"}
+                  Try again
                 </Button>
-                <Button
-                  asChild
-                  className="h-12 rounded-none border-border px-8 text-[10px] font-bold uppercase tracking-widest"
-                  variant="outline"
-                >
-                  <a
-                    href={githubAppInstallUrl}
-                    onClick={markGitHubAccessOpened}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    Grant Access
-                    <ExternalLink className="ml-2 h-3.5 w-3.5" />
-                  </a>
-                </Button>
-                <ImportGuidePopup />
-              </div>
-
-              {readyData.repositories.length === 0 ? (
-                <ImportState
-                  description="GitHub did not return any repositories for this account."
-                  title="No Repositories Available"
-                />
-              ) : (
-                <section className="space-y-6">
-                  <div className="flex items-center justify-between border-b border-border pb-3">
-                    <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-                      Repositories
-                    </p>
-                    <RepositoryOwnerFilter
-                      onOwnerChange={setSelectedOwner}
-                      owners={ownerOptions}
-                      selectedOwner={selectedOwner}
-                    />
-                  </div>
-
-                  <RepositorySearchBar
-                    disabled={isLoading || filteredRepositories.length === 0}
-                    githubAppInstallUrl={githubAppInstallUrl}
-                    importedProjects={readyData.importedProjects}
-                    key={selectedOwner}
-                    onGrantAccess={markGitHubAccessOpened}
-                    repositories={filteredRepositories}
+              }
+              description={data.message}
+              icon={<ShieldAlert className="h-5 w-5" />}
+              title="Couldn't load repositories"
+            />
+          ) : readyData ? (
+            readyData.repositories.length === 0 ? (
+              <ImportState
+                description="GitHub didn't return any repositories. Give Inlaya access to a repository, then refresh."
+                title="No repositories found"
+              />
+            ) : (
+              <RepositorySearchBar
+                disabled={isLoading || filteredRepositories.length === 0}
+                githubAppInstallUrl={githubAppInstallUrl}
+                importedProjects={readyData.importedProjects}
+                key={selectedOwner}
+                leading={
+                  <RepositoryOwnerFilter
+                    onOwnerChange={setSelectedOwner}
+                    owners={ownerOptions}
+                    selectedOwner={selectedOwner}
                   />
-                </section>
-              )}
-            </>
+                }
+                onGrantAccess={markGitHubAccessOpened}
+                repositories={filteredRepositories}
+              />
+            )
           ) : (
             <LoadingRepositories />
           )}
         </div>
+
+        {readyData ? (
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-border bg-card px-6 py-3 text-xs text-muted-foreground">
+            <p>
+              Missing a repository?{" "}
+              <a
+                className="inline-flex items-center gap-1 font-medium text-foreground underline-offset-4 transition-colors hover:text-[#f04f2f] hover:underline"
+                href={githubAppInstallUrl}
+                onClick={markGitHubAccessOpened}
+                rel="noreferrer"
+                target="_blank"
+              >
+                Give Inlaya access on GitHub
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                className="h-8 rounded-none px-3 text-xs font-medium"
+                disabled={isLoading}
+                onClick={() => void loadData(true)}
+                variant="outline"
+              >
+                {isLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
+                {isLoading ? "Refreshing…" : "Refresh"}
+              </Button>
+              <ImportGuidePopup />
+            </div>
+          </div>
+        ) : null}
       </DialogContent>
     </Dialog>
   );
@@ -364,11 +361,22 @@ export function NewImportModal({
 
 function LoadingRepositories() {
   return (
-    <div className="flex flex-col items-center justify-center border border-dashed border-border bg-muted/10 py-24 text-center">
-      <Database className="mb-4 h-8 w-8 animate-pulse text-muted-foreground/30" />
-      <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-        Loading Repositories...
-      </p>
+    <div className="space-y-4" aria-label="Loading repositories">
+      <div className="flex gap-3">
+        <Skeleton className="h-10 w-48 rounded-none" />
+        <Skeleton className="h-10 flex-1 rounded-none" />
+      </div>
+      <div className="grid gap-px border border-border bg-border">
+        {Array.from({ length: 5 }).map((_, index) => (
+          <div
+            className="flex items-center justify-between gap-4 bg-card px-4 py-3.5"
+            key={`repo-loading-${index}`}
+          >
+            <Skeleton className="h-4 w-1/2 rounded-none" />
+            <Skeleton className="h-9 w-24 rounded-none" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -376,22 +384,26 @@ function LoadingRepositories() {
 function ImportState({
   action,
   description,
+  icon,
   title,
 }: {
   action?: React.ReactNode;
   description: string;
+  icon?: React.ReactNode;
   title: string;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center border border-dashed border-border bg-muted/10 py-24 text-center">
-      <Database className="mb-4 h-8 w-8 text-muted-foreground/30" />
-      <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+    <div className="flex min-h-[320px] flex-col items-center justify-center border border-dashed border-border bg-card/60 px-6 py-12 text-center">
+      <div className="flex h-12 w-12 items-center justify-center bg-muted text-muted-foreground">
+        {icon ?? <FolderGit2 className="h-5 w-5" />}
+      </div>
+      <h3 className="inlaya-display mt-5 text-2xl font-medium tracking-[-0.035em]">
         {title}
-      </p>
-      <p className="mb-6 mt-2 max-w-sm text-[10px] uppercase leading-relaxed text-muted-foreground">
+      </h3>
+      <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
         {description}
       </p>
-      {action}
+      {action ? <div className="mt-6">{action}</div> : null}
     </div>
   );
 }
