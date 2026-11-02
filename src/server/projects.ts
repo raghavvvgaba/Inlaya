@@ -105,7 +105,6 @@ export async function getProjectsPageData(userId: string) {
       where: { userId },
       orderBy: { createdAt: "desc" },
       include: {
-        _count: { select: { chatSessions: true } },
         // Latest agent run, shown on the card as "last worked on".
         agentRuns: {
           orderBy: { startedAt: "desc" },
@@ -119,9 +118,8 @@ export async function getProjectsPageData(userId: string) {
 
   return {
     githubStatus,
-    projects: projects.map(({ _count, agentRuns, ...project }) => ({
+    projects: projects.map(({ agentRuns, ...project }) => ({
       ...project,
-      issuesWorkedOn: _count.chatSessions,
       lastRun: agentRuns[0] ?? null,
     })),
   };

@@ -3,7 +3,6 @@ import {
   ArrowUpRight,
   FolderGit2,
   Github,
-  MessageSquare,
   Plus,
 } from "lucide-react";
 
@@ -206,13 +205,6 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
                         {formatImportedDate(project.createdAt)}
                       </p>
                     )}
-                    {project.issuesWorkedOn > 0 ? (
-                      <p className="flex shrink-0 items-center gap-1.5">
-                        <MessageSquare className="h-3.5 w-3.5" />
-                        {project.issuesWorkedOn}{" "}
-                        {project.issuesWorkedOn === 1 ? "issue" : "issues"}
-                      </p>
-                    ) : null}
                   </div>
                 </Link>
               </article>
