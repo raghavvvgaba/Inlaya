@@ -12,6 +12,12 @@ const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const config = {
   output: "standalone",
   outputFileTracingRoot: currentDir,
+  experimental: {
+    // Reuse recently visited dynamic pages on client navigation for 30s.
+    staleTimes: {
+      dynamic: 30,
+    },
+  },
   webpack(webpackConfig) {
     webpackConfig.module.rules.push({
       test: /\.txt$/i,
