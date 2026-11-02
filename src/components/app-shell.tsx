@@ -12,6 +12,8 @@ import { cn } from "~/lib/utils";
 
 type AppShellProps = {
   title: string;
+  // Page one level up, shown as a link between the logo and the title.
+  parent?: { href: string; label: string };
   description?: string;
   compactHeader?: boolean;
   contentWidth?: "default" | "full";
@@ -21,6 +23,7 @@ type AppShellProps = {
 
 export function AppShell({
   title,
+  parent,
   description,
   compactHeader = false,
   contentWidth = "default",
@@ -48,7 +51,23 @@ export function AppShell({
             >
               /
             </span>
-            <p className="truncate text-xs font-medium text-muted-foreground">
+            {parent ? (
+              <>
+                <Link
+                  className="shrink-0 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                  href={parent.href}
+                >
+                  {parent.label}
+                </Link>
+                <span
+                  aria-hidden="true"
+                  className="mx-2 text-sm text-border sm:mx-3"
+                >
+                  /
+                </span>
+              </>
+            ) : null}
+            <p className="truncate text-xs font-medium text-foreground">
               {title}
             </p>
           </div>

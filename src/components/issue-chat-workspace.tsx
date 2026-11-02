@@ -1,11 +1,15 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
+  Activity,
+  CheckCircle2,
+  ChevronLeft,
   ExternalLink,
   GitPullRequest,
   LoaderCircle,
+  MoreHorizontal,
   PanelLeftClose,
   Trash2,
 } from "lucide-react";
@@ -23,6 +27,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import { useSidebar } from "~/components/issue-workspace-layout";
 import {
   appendFinalMessageDelta,
@@ -38,9 +48,11 @@ import type { SandboxAgentMode } from "~/server/sandbox/types";
 type IssueChatWorkspaceProps = {
   accessBlocked: boolean;
   agentAction: string;
+  backHref: string;
   clearChatAction: string;
   initialInstruction: string;
   initialMessages: AIChatMessage[];
+  issueDetails?: ReactNode;
   issueNumber: number;
   issueTitle?: string;
   projectId: string;
@@ -111,16 +123,17 @@ const MAX_WORKING_UPDATES = 5;
 export function IssueChatWorkspace({
   accessBlocked,
   agentAction,
+  backHref,
   clearChatAction,
   initialInstruction,
   initialMessages,
+  issueDetails,
   issueNumber,
   issueTitle,
   projectId,
   sessionAction,
   submitAction,
 }: IssueChatWorkspaceProps) {
-  const router = useRouter();
   const [messages, setMessages] = useState(initialMessages);
   const [instruction, setInstruction] = useState(initialInstruction);
   const [agentMode, setAgentMode] = useState<SandboxAgentMode>("build");
@@ -128,6 +141,9 @@ export function IssueChatWorkspace({
   const [isClearingChat, setIsClearingChat] = useState(false);
   const [isClearChatDialogOpen, setIsClearChatDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Only tracks build runs from this page visit; the header menu still
+  // allows submitting changes made before a reload.
+  const [hasPendingChanges, setHasPendingChanges] = useState(false);
   const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(null);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
   const [submitSessionId, setSubmitSessionId] = useState<string | null>(null);
@@ -313,6 +329,7 @@ export function IssueChatWorkspace({
   async function handleRunAgent() {
     const trimmedInstruction = instruction.trim();
     const sessionId = getSandboxSessionId();
+    const runMode = agentMode;
 
     if (!trimmedInstruction || accessBlocked || isRunning) {
       return;
@@ -379,6 +396,9 @@ export function IssueChatWorkspace({
         ),
         ...nextMessages,
       ]);
+      if (runMode === "build" && result.status === "completed") {
+        setHasPendingChanges(true);
+      }
       window.dispatchEvent(
         new CustomEvent(sandboxSessionUpdatedEvent, {
           detail: { projectId, sessionId },
@@ -438,6 +458,7 @@ export function IssueChatWorkspace({
       }
 
       setSubmitMessage(result.message);
+      setHasPendingChanges(false);
 
       if (result.pullRequestUrl) {
         setPullRequestUrl(result.pullRequestUrl);
@@ -495,113 +516,129 @@ export function IssueChatWorkspace({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {issueTitle ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#171713]/10 bg-[#fffaf0]/45 px-4 py-4 dark:border-[#fffaf0]/10 dark:bg-white/[0.02]">
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 shrink-0 rounded-none text-[#6d675d] hover:bg-[#f04f2f] hover:text-white dark:text-[#aaa69d]"
-              onClick={() => setIsOpen(false)}
-            >
-              <PanelLeftClose className="h-3.5 w-3.5" />
-            </Button>
-            <h1 className="inlaya-display min-w-0 flex-1 text-lg font-medium leading-tight tracking-[-0.025em] line-clamp-2">
-              {issueTitle}
-            </h1>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <Dialog
-              open={isClearChatDialogOpen}
-              onOpenChange={setIsClearChatDialogOpen}
-            >
+      <header className="relative flex min-h-14 shrink-0 items-center gap-2 border-b border-[#171713]/15 bg-[#f3efe5]/70 px-3 py-2 dark:border-[#fffaf0]/15 dark:bg-[#11110f]/70">
+        <span className="absolute bottom-[-1px] left-3 h-px w-12 bg-[#f04f2f]" />
+        <Button
+          asChild
+          className="h-7 w-7 shrink-0 rounded-none text-[#6d675d] hover:bg-[#171713]/5 hover:text-[#171713] dark:text-[#aaa69d] dark:hover:bg-white/5 dark:hover:text-[#fffaf0]"
+          size="icon"
+          variant="ghost"
+        >
+          <Link aria-label="Back to project" href={backHref}>
+            <ChevronLeft className="h-4 w-4" />
+          </Link>
+        </Button>
+        <h1 className="inlaya-display min-w-0 flex-1 text-base font-medium leading-tight tracking-[-0.025em] line-clamp-2">
+          {issueTitle ?? `Issue #${issueNumber}`}
+        </h1>
+        <div className="flex shrink-0 items-center gap-1">
+          {issueDetails}
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
               <Button
-                className="h-7 rounded-none px-2.5 text-[10px] font-semibold uppercase tracking-[0.1em]"
+                aria-label="More options"
+                className="h-7 w-7 rounded-none text-[#6d675d] hover:bg-[#171713]/5 hover:text-[#171713] dark:text-[#aaa69d] dark:hover:bg-white/5 dark:hover:text-[#fffaf0]"
+                size="icon"
+                type="button"
+                variant="ghost"
+              >
+                <MoreHorizontal className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuItem
+                disabled={accessBlocked || isRunning || isSubmitting}
+                onClick={() => void handleSubmitChanges()}
+              >
+                <GitPullRequest className="h-3.5 w-3.5" />
+                Submit for review
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/activity">
+                  <Activity className="h-3.5 w-3.5" />
+                  Activity
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem
                 disabled={!canClearChat}
                 onClick={() => setIsClearChatDialogOpen(true)}
-                type="button"
                 variant="destructive"
               >
-                {isClearingChat ? (
-                  <LoaderCircle className="mr-1 h-3 w-3 animate-spin" />
-                ) : (
-                  <Trash2 className="mr-1 h-3 w-3" />
-                )}
+                <Trash2 className="h-3.5 w-3.5" />
                 Clear chat
-              </Button>
-              <DialogContent
-                className="inlaya-landing rounded-none border-[#171713]/25 bg-[#f3efe5] text-[#171713] shadow-[10px_10px_0_rgba(240,79,47,0.2)] dark:border-[#fffaf0]/20 dark:bg-[#11110f] dark:text-[#f3efe5]"
-                showCloseButton={false}
-              >
-                <DialogHeader>
-                  <DialogTitle>Clear issue chat?</DialogTitle>
-                  <DialogDescription>
-                    This removes the saved chat history for issue #{issueNumber}.
-                    It will not affect the sandbox, preview, or pull request state.
-                  </DialogDescription>
-                </DialogHeader>
-                <DialogFooter>
-                  <DialogClose asChild>
-                    <Button
-                      className="rounded-none"
-                      disabled={isClearingChat}
-                      type="button"
-                      variant="outline"
-                    >
-                      Cancel
-                    </Button>
-                  </DialogClose>
-                  <Button
-                    className="rounded-none"
-                    disabled={isClearingChat}
-                    onClick={handleClearChat}
-                    type="button"
-                    variant="destructive"
-                  >
-                    {isClearingChat ? (
-                      <LoaderCircle className="mr-1 h-3 w-3 animate-spin" />
-                    ) : (
-                      <Trash2 className="mr-1 h-3 w-3" />
-                    )}
-                    Clear chat
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-            {pullRequestUrl ? (
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button
+            aria-label="Hide chat"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 shrink-0 rounded-none text-[#6d675d] hover:bg-[#f04f2f] hover:text-white dark:text-[#aaa69d]"
+            onClick={() => setIsOpen(false)}
+          >
+            <PanelLeftClose className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </header>
+
+      <Dialog
+        open={isClearChatDialogOpen}
+        onOpenChange={setIsClearChatDialogOpen}
+      >
+        <DialogContent
+          className="inlaya-landing rounded-none border-[#171713]/25 bg-[#f3efe5] text-[#171713] shadow-[10px_10px_0_rgba(240,79,47,0.2)] dark:border-[#fffaf0]/20 dark:bg-[#11110f] dark:text-[#f3efe5]"
+          showCloseButton={false}
+        >
+          <DialogHeader>
+            <DialogTitle>Clear issue chat?</DialogTitle>
+            <DialogDescription>
+              This removes the saved chat history for issue #{issueNumber}.
+              It will not affect the sandbox, preview, or pull request state.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
               <Button
-                asChild
-                className="h-7 rounded-none border-[#171713]/20 bg-transparent px-2.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#6d675d] hover:border-[#f04f2f] hover:bg-[#f04f2f]/10 hover:text-[#171713] dark:border-[#fffaf0]/20 dark:text-[#aaa69d] dark:hover:text-[#fffaf0]"
+                className="rounded-none"
+                disabled={isClearingChat}
+                type="button"
                 variant="outline"
               >
-                <a href={pullRequestUrl} rel="noreferrer" target="_blank">
-                  <ExternalLink className="mr-1 h-3 w-3" />
-                  Open PR
-                </a>
+                Cancel
               </Button>
-            ) : null}
+            </DialogClose>
             <Button
-              className="h-7 rounded-none bg-[#171713] px-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#fffaf0] hover:bg-[#f04f2f] dark:bg-[#fffaf0] dark:text-[#171713] dark:hover:bg-[#f04f2f] dark:hover:text-white"
-              disabled={accessBlocked || isRunning || isSubmitting}
-              onClick={handleSubmitChanges}
+              className="rounded-none"
+              disabled={isClearingChat}
+              onClick={handleClearChat}
               type="button"
+              variant="destructive"
             >
-              {isSubmitting ? (
+              {isClearingChat ? (
                 <LoaderCircle className="mr-1 h-3 w-3 animate-spin" />
               ) : (
-                <GitPullRequest className="mr-1 h-3 w-3" />
+                <Trash2 className="mr-1 h-3 w-3" />
               )}
-              {isSubmitting ? "Submitting" : "Submit"}
+              Clear chat
             </Button>
-          </div>
-        </div>
-      ) : null}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AIChat
         className="flex min-h-0 flex-1 flex-col border-x-0 border-b-0 border-t-0"
         fullBleed
         messages={messages}
       >
+      <SubmitReviewCard
+        accessBlocked={accessBlocked}
+        hasPendingChanges={hasPendingChanges}
+        isRunning={isRunning}
+        isSubmitting={isSubmitting}
+        onSubmit={handleSubmitChanges}
+        pullRequestUrl={pullRequestUrl}
+        submitMessage={submitMessage}
+      />
       <ChatInputBox
         accessBlocked={accessBlocked}
         instruction={instruction}
@@ -614,6 +651,82 @@ export function IssueChatWorkspace({
         selectedModel={selectedModel}
       />
       </AIChat>
+    </div>
+  );
+}
+
+function SubmitReviewCard({
+  accessBlocked,
+  hasPendingChanges,
+  isRunning,
+  isSubmitting,
+  onSubmit,
+  pullRequestUrl,
+  submitMessage,
+}: {
+  accessBlocked: boolean;
+  hasPendingChanges: boolean;
+  isRunning: boolean;
+  isSubmitting: boolean;
+  onSubmit: () => void;
+  pullRequestUrl: string | null;
+  submitMessage: string | null;
+}) {
+  if (isRunning || (!isSubmitting && !hasPendingChanges && !pullRequestUrl)) {
+    return null;
+  }
+
+  let icon: ReactNode;
+  let title: string;
+  let body: string;
+  let action: ReactNode = null;
+
+  if (isSubmitting) {
+    icon = <LoaderCircle className="h-4 w-4 animate-spin text-[#f04f2f]" />;
+    title = "Submitting for review";
+    body = submitMessage ?? "Preparing your changes";
+  } else if (hasPendingChanges) {
+    icon = <GitPullRequest className="h-4 w-4 text-[#f04f2f]" />;
+    title = pullRequestUrl ? "New changes ready" : "Your changes are ready";
+    body = pullRequestUrl
+      ? "Submit again to add them to the open pull request."
+      : "Check the preview, then submit them for review.";
+    action = (
+      <Button
+        className="h-8 shrink-0 rounded-none bg-[#171713] px-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#fffaf0] hover:bg-[#f04f2f] dark:bg-[#fffaf0] dark:text-[#171713] dark:hover:bg-[#f04f2f] dark:hover:text-white"
+        disabled={accessBlocked}
+        onClick={onSubmit}
+        type="button"
+      >
+        Submit for review
+      </Button>
+    );
+  } else {
+    icon = <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />;
+    title = "Submitted for review";
+    body = "A pull request is open with your changes.";
+    action = (
+      <Button
+        asChild
+        className="h-8 shrink-0 rounded-none border-[#171713]/20 bg-transparent px-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#6d675d] hover:border-[#f04f2f] hover:bg-[#f04f2f]/10 hover:text-[#171713] dark:border-[#fffaf0]/20 dark:text-[#aaa69d] dark:hover:text-[#fffaf0]"
+        variant="outline"
+      >
+        <a href={pullRequestUrl ?? undefined} rel="noreferrer" target="_blank">
+          <ExternalLink className="mr-1 h-3 w-3" />
+          View PR
+        </a>
+      </Button>
+    );
+  }
+
+  return (
+    <div className="mx-3 mb-2 flex items-center gap-3 border border-[#171713]/15 bg-[#fffaf0]/80 px-3 py-2.5 dark:border-white/10 dark:bg-[#171713]/80">
+      <span className="shrink-0">{icon}</span>
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-semibold text-[#171713] dark:text-[#fffaf0]">{title}</p>
+        <p className="truncate text-[11px] text-[#777167] dark:text-[#817e75]">{body}</p>
+      </div>
+      {action}
     </div>
   );
 }

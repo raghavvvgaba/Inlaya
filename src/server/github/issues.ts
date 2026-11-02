@@ -55,6 +55,31 @@ export type ProjectIssueResult =
       status: "missing_access" | "error" | "not_found";
     };
 
+const ISSUES_PAGE_SIZE = 100;
+const MAX_OPEN_ISSUES = 500;
+// The issues endpoint also returns pull requests, so allow a few extra pages
+// before giving up on reaching MAX_OPEN_ISSUES.
+const MAX_ISSUE_PAGES = 10;
+// The issue list only shows a one-line preview of each body, so keep the
+// cached list small (Next.js skips caching entries over 2 MB).
+const ISSUE_BODY_PREVIEW_LENGTH = 600;
+
+function getNextPageUrl(linkHeader: string | null) {
+  if (!linkHeader) {
+    return null;
+  }
+
+  for (const part of linkHeader.split(",")) {
+    const match = /<([^>]+)>;\s*rel="next"/.exec(part);
+
+    if (match?.[1]) {
+      return match[1];
+    }
+  }
+
+  return null;
+}
+
 export async function fetchProjectOpenIssues(
   repoOwner: string,
   repoName: string,
@@ -73,47 +98,56 @@ export async function fetchProjectOpenIssues(
         } satisfies ProjectIssuesResult;
       }
 
-      const response = await fetch(
-        `https://api.github.com/repos/${repoOwner}/${repoName}/issues?state=open&per_page=10`,
-        {
+      const issues: ProjectIssue[] = [];
+      let nextUrl: string | null =
+        `https://api.github.com/repos/${repoOwner}/${repoName}/issues?state=open&per_page=${ISSUES_PAGE_SIZE}`;
+
+      for (
+        let page = 0;
+        nextUrl && page < MAX_ISSUE_PAGES && issues.length < MAX_OPEN_ISSUES;
+        page++
+      ) {
+        const response: Response = await fetch(nextUrl, {
           headers: {
             Accept: "application/vnd.github+json",
             Authorization: `Bearer ${installationToken}`,
             "User-Agent": "devin-app",
             "X-GitHub-Api-Version": GITHUB_API_VERSION,
           },
-        },
-      );
+        });
 
-      if (response.status === 404 || response.status === 403) {
-        return {
-          issues: [],
-          status: "missing_access",
-        } satisfies ProjectIssuesResult;
+        if (response.status === 404 || response.status === 403) {
+          return {
+            issues: [],
+            status: "missing_access",
+          } satisfies ProjectIssuesResult;
+        }
+
+        if (!response.ok) {
+          return {
+            issues: [],
+            status: "error",
+          } satisfies ProjectIssuesResult;
+        }
+
+        const pageIssues = ((await response.json()) as GithubIssueResponse[])
+          .filter((issue) => !issue.pull_request)
+          .map<ProjectIssue>((issue) => ({
+            author: issue.user.login,
+            body: issue.body?.slice(0, ISSUE_BODY_PREVIEW_LENGTH) ?? null,
+            comments: issue.comments,
+            createdAt: issue.created_at,
+            id: issue.id,
+            number: issue.number,
+            state: issue.state,
+            title: issue.title,
+            updatedAt: issue.updated_at,
+            url: issue.html_url,
+          }));
+
+        issues.push(...pageIssues.slice(0, MAX_OPEN_ISSUES - issues.length));
+        nextUrl = getNextPageUrl(response.headers.get("link"));
       }
-
-      if (!response.ok) {
-        return {
-          issues: [],
-          status: "error",
-        } satisfies ProjectIssuesResult;
-      }
-
-      const issues = ((await response.json()) as GithubIssueResponse[])
-        .filter((issue) => !issue.pull_request)
-        .slice(0, 10)
-        .map<ProjectIssue>((issue) => ({
-          author: issue.user.login,
-          body: issue.body,
-          comments: issue.comments,
-          createdAt: issue.created_at,
-          id: issue.id,
-          number: issue.number,
-          state: issue.state,
-          title: issue.title,
-          updatedAt: issue.updated_at,
-          url: issue.html_url,
-        }));
 
       return {
         issues,

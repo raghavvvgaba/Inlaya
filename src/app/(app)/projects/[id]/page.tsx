@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
-  Activity,
+  ArrowUpRight,
   ChevronLeft,
   Clock,
   ExternalLink,
@@ -9,13 +9,14 @@ import {
   MessageSquare,
   ShieldAlert,
   Terminal,
+  User,
 } from "lucide-react";
 
 import { AppShell } from "~/components/app-shell";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
-import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { CreateIssueDialog } from "~/components/create-issue-dialog";
+import { ProjectIssueSearch } from "~/components/project-issue-search";
 import { ProjectIssuesRefreshOnReturn } from "~/components/project-issues-refresh-on-return";
 import { env } from "~/env";
 import { getAuth } from "~/server/auth/session";
@@ -35,6 +36,27 @@ function formatProjectDate(value: Date) {
   }).toUpperCase();
 }
 
+// First readable line of an issue's markdown body, for a one-line preview.
+function getIssueSnippet(body: string | null) {
+  if (!body) return null;
+
+  for (const line of body.split("\n")) {
+    // Template headings ("## Bug") say little about the issue itself.
+    if (/^\s*#{1,6}\s/.test(line)) continue;
+
+    const text = line
+      .replace(/<!--.*?-->/g, "")
+      .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+      .replace(/^\s*(>\s*|[-*+]\s+(\[[ xX]\]\s+)?|\d+\.\s+)/, "")
+      .replace(/[*_`~]/g, "")
+      .trim();
+
+    if (text) return text;
+  }
+
+  return null;
+}
+
 export default async function ProjectPage({ params }: ProjectPageProps) {
   const { userId } = await getAuth();
   const { id } = await params;
@@ -48,60 +70,65 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
   const sandboxBaseAction = `/api/projects/${project.id}/sandbox`;
 
   return (
-    <AppShell compactHeader description="" title="Project">
+    <AppShell
+      compactHeader
+      description=""
+      parent={{ href: "/projects", label: "Projects" }}
+      title={project.repoName}
+    >
       <ProjectIssuesRefreshOnReturn projectId={project.id} />
-      <div className="space-y-7">
-        <section className="space-y-4 border-b border-border pb-5">
-          <div className="flex items-start justify-between gap-4">
-            <Button
-              asChild
-              variant="outline"
-              className="h-9 rounded-md border-border px-3 text-xs font-medium"
+      <div className="space-y-8 pb-8">
+        <section className="flex flex-col gap-6 border-b border-border pb-7 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0">
+            <Link
+              className="mb-5 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground transition-colors hover:text-foreground"
+              href="/projects"
             >
-              <Link href="/projects">
-                <ChevronLeft className="mr-1.5 h-4 w-4" />
-                Return to Projects
-              </Link>
-            </Button>
+              <ChevronLeft className="h-3.5 w-3.5" />
+              Projects
+            </Link>
+            <p className="text-xs text-muted-foreground">{project.repoOwner}</p>
+            <h1 className="inlaya-display mt-1 truncate text-5xl font-medium tracking-[-0.055em] sm:text-6xl">
+              {project.repoName}
+            </h1>
+            <p className="mt-3 text-[11px] text-muted-foreground">
+              Imported {formatProjectDate(project.createdAt)}
+            </p>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2">
             <Button
               asChild
               variant="outline"
-              className="h-9 w-9 rounded-md border-border p-0"
+              className="h-11 rounded-none px-4 text-sm font-semibold"
             >
               <a
                 href={`https://github.com/${project.repoOwner}/${project.repoName}`}
                 rel="noreferrer"
                 target="_blank"
               >
-                <ExternalLink className="h-4 w-4" />
-                <span className="sr-only">Open Repository</span>
+                <Github className="h-4 w-4" />
+                View on GitHub
               </a>
             </Button>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Github className="h-5 w-5 text-muted-foreground" />
-              <h1 className="text-xl font-semibold tracking-tight">
-                {project.repoOwner}/{project.repoName}
-              </h1>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Indexed on {formatProjectDate(project.createdAt)}
-            </p>
+            {issuesResult.status === "ok" ? (
+              <CreateIssueDialog projectId={project.id} />
+            ) : null}
           </div>
         </section>
-        <section className="space-y-6">
-      <div className="flex items-center justify-between border-b border-border pb-5">
-        <div>
-          <h2 className="text-base font-semibold tracking-tight">
-            Repository Issues
-          </h2>
-        </div>
-        {issuesResult.status === "ok" ? (
-          <CreateIssueDialog projectId={project.id} />
-        ) : null}
-      </div>
+
+        <section className="space-y-5">
+          <div className="flex items-baseline justify-between gap-4">
+            <h2 className="inlaya-display text-3xl font-medium tracking-[-0.04em]">
+              Open issues
+            </h2>
+            {issuesResult.status === "ok" ? (
+              <p className="text-sm text-muted-foreground">
+                {issuesResult.issues.length}{" "}
+                {issuesResult.issues.length === 1 ? "issue" : "issues"}
+              </p>
+            ) : null}
+          </div>
 
       {issuesResult.status === "missing_access" ? (
         <Alert
@@ -110,18 +137,19 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
         >
           <ShieldAlert className="h-4 w-4 text-amber-500" />
           <AlertTitle className="text-sm font-semibold">
-            Access Required
+            Inlaya can&apos;t see this repository
           </AlertTitle>
           <AlertDescription className="mt-3 space-y-3">
             <p className="text-sm leading-relaxed">
-              GitHub App installation missing or revoked for this repository.
+              Inlaya&apos;s access to this repository on GitHub was removed or never
+              finished. Give it access again to see and work on its issues.
             </p>
             <Button
               asChild
-              className="bg-amber-500 text-amber-950 font-medium text-xs h-9 rounded-md hover:bg-amber-400"
+              className="h-9 rounded-none bg-amber-500 text-xs font-medium text-amber-950 hover:bg-amber-400"
             >
               <a href={env.GITHUB_APP_INSTALL_URL} rel="noreferrer" target="_blank">
-                Grant Resource Access
+                Give access on GitHub
               </a>
             </Button>
           </AlertDescription>
@@ -135,87 +163,98 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
         >
           <ShieldAlert className="h-4 w-4 text-destructive" />
           <AlertTitle className="text-sm font-semibold text-destructive">
-            API Sync Failure
+            Couldn&apos;t load issues
           </AlertTitle>
           <AlertDescription className="mt-2 text-sm leading-relaxed text-destructive">
-            GitHub API responded with an error. Metadata is preserved, but the issue feed
-            is unavailable.
+            GitHub didn&apos;t respond as expected. This is usually temporary, so try
+            refreshing the page in a minute.
           </AlertDescription>
         </Alert>
       ) : null}
 
       {issuesResult.status === "ok" && issuesResult.issues.length === 0 ? (
-        <div className="flex flex-col items-center justify-center border border-dashed border-border bg-muted/10 py-16 text-center">
-          <Terminal className="mb-4 h-8 w-8 text-muted-foreground/30" />
-          <p className="text-sm font-medium text-muted-foreground">
-            No open issues detected
-          </p>
+        <div className="flex min-h-[280px] flex-col items-center justify-center border border-dashed border-border bg-card/60 text-center">
+          <div className="flex h-12 w-12 items-center justify-center bg-muted text-muted-foreground">
+            <Terminal className="h-5 w-5" />
+          </div>
+          <h3 className="inlaya-display mt-5 text-2xl font-medium tracking-[-0.035em]">
+            No open issues
+          </h3>
           <p className="mt-1 text-xs text-muted-foreground">
-            No open issues were detected for this repository.
+            Create one to start working on a change.
           </p>
         </div>
       ) : null}
 
-
       {issuesResult.status === "ok" && issuesResult.issues.length > 0 ? (
-        <div className="grid gap-px border border-border bg-border">
+        <ProjectIssueSearch
+          className="grid gap-3"
+          issues={issuesResult.issues.map(({ author, number, title }) => ({
+            author,
+            number,
+            title,
+          }))}
+        >
           {issuesResult.issues.map((issue) => (
-            <div
-              className="group/issue relative flex flex-col gap-4 bg-card p-6 transition-[background-color,box-shadow,transform] duration-200 before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-emerald-500 before:opacity-0 before:transition-opacity hover:-translate-y-0.5 hover:bg-muted/40 hover:shadow-[0_14px_45px_rgba(0,0,0,0.22)] hover:before:opacity-100 md:flex-row md:items-start md:justify-between"
+            <article
+              className="group/issue relative flex flex-col gap-4 border border-border bg-card p-6 transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-foreground/30 hover:shadow-[7px_7px_0_rgba(240,79,47,0.13)] md:flex-row md:items-center md:justify-between"
               key={issue.id}
             >
               <Link
-                className="group flex-1 space-y-4"
+                className="min-w-0 flex-1"
                 href={`/projects/${project.id}/issues/${issue.number}`}
               >
-                <div className="flex flex-wrap items-center gap-3">
-                  <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 hover:bg-emerald-500/10 rounded-md text-xs font-medium">
-                    Open
-                  </Badge>
+                <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                  <span className="h-1.5 w-1.5 bg-emerald-500" />
+                  Open · #{issue.number}
                 </div>
-                <div>
-                  <h4 className="text-base font-semibold transition-colors group-hover:text-primary group-hover/issue:text-primary">
-                    {issue.title}
-                  </h4>
-                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 transition-colors group-hover/issue:text-muted-foreground/90">
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors group-hover/issue:text-muted-foreground/90">
-                      <Activity className="h-3.5 w-3.5" />
-                      {issue.author}
-                    </div>
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors group-hover/issue:text-muted-foreground/90">
-                      <MessageSquare className="h-3.5 w-3.5" />
-                      {issue.comments} replies
-                    </div>
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors group-hover/issue:text-muted-foreground/90">
-                      <Clock className="h-3.5 w-3.5" />
-                      Updated {new Date(issue.updatedAt).toLocaleDateString()}
-                    </div>
-                  </div>
+                <h3 className="inlaya-display mt-2 text-2xl font-medium leading-tight tracking-[-0.035em] transition-colors group-hover/issue:text-[#f04f2f]">
+                  {issue.title}
+                </h3>
+                {getIssueSnippet(issue.body) ? (
+                  <p className="mt-2 line-clamp-1 text-sm text-muted-foreground">
+                    {getIssueSnippet(issue.body)}
+                  </p>
+                ) : null}
+                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <User className="h-3.5 w-3.5" />
+                    {issue.author}
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <MessageSquare className="h-3.5 w-3.5" />
+                    {issue.comments} {issue.comments === 1 ? "reply" : "replies"}
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <Clock className="h-3.5 w-3.5" />
+                    Updated {new Date(issue.updatedAt).toLocaleDateString()}
+                  </span>
                 </div>
               </Link>
 
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex shrink-0 items-center gap-2">
                 <Button
                   asChild
-                  className="h-9 rounded-md px-4 text-xs font-medium transition-transform group-hover/issue:-translate-y-px"
+                  className="h-10 rounded-none px-4 text-xs font-semibold hover:bg-[#f04f2f] hover:text-white"
                 >
                   <Link href={`/projects/${project.id}/issues/${issue.number}`}>
-                    Open Issue Workspace
+                    Open workspace
+                    <ArrowUpRight className="h-3.5 w-3.5" />
                   </Link>
                 </Button>
                 <Button
                   asChild
                   variant="outline"
-                  className="rounded-md h-9 w-9 p-0"
+                  className="h-10 w-10 rounded-none p-0"
                 >
                   <a href={issue.url} rel="noreferrer" target="_blank" aria-label="View on GitHub">
                     <ExternalLink className="h-3.5 w-3.5" />
                   </a>
                 </Button>
               </div>
-            </div>
+            </article>
           ))}
-        </div>
+        </ProjectIssueSearch>
       ) : null}
         </section>
       </div>

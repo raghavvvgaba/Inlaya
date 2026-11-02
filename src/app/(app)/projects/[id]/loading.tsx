@@ -3,7 +3,12 @@ import { Skeleton } from "~/components/ui/skeleton";
 
 export default function ProjectLoading() {
   return (
-    <AppShell compactHeader description="" title="Project">
+    <AppShell
+      compactHeader
+      description=""
+      parent={{ href: "/projects", label: "Projects" }}
+      title="Project"
+    >
       <div className="space-y-7">
         <section className="space-y-4 border-b border-border pb-5">
           <div className="flex items-start justify-between gap-4">

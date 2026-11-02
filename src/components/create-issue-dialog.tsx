@@ -84,12 +84,12 @@ export function CreateIssueDialog({ projectId }: CreateIssueDialogProps) {
   return (
     <>
       <Button
-        className="h-9 rounded-md px-4 text-xs font-medium"
+        className="h-11 rounded-none px-5 text-sm font-semibold"
         id="new-issue-button"
         onClick={openDialog}
         type="button"
       >
-        <CirclePlus className="mr-1.5 h-3.5 w-3.5" />
+        <CirclePlus className="h-4 w-4" />
         New Issue
       </Button>
 

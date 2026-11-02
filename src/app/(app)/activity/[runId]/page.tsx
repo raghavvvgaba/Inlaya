@@ -302,7 +302,12 @@ export default async function ActivityRunPage({
   ].filter((group) => group.paths.length > 0);
 
   return (
-    <AppShell compactHeader description="" title="Run trace">
+    <AppShell
+      compactHeader
+      description=""
+      parent={{ href: "/activity", label: "Activity" }}
+      title="Run trace"
+    >
       <div className="space-y-7 pb-10">
         <section className="border-b border-border pb-7">
           <Link

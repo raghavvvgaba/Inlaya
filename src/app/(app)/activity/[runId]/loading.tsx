@@ -3,7 +3,12 @@ import { Skeleton } from "~/components/ui/skeleton";
 
 export default function ActivityRunLoading() {
   return (
-    <AppShell compactHeader description="" title="Run trace">
+    <AppShell
+      compactHeader
+      description=""
+      parent={{ href: "/activity", label: "Activity" }}
+      title="Run trace"
+    >
       <div className="space-y-7">
         <section className="space-y-4 border-b border-border pb-7">
           <Skeleton className="h-3 w-32 rounded-none" />

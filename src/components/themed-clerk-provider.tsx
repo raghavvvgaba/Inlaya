@@ -1,23 +1,22 @@
 "use client";
 
 import { ClerkProvider } from "@clerk/nextjs";
-import { dark, shadcn } from "@clerk/themes";
-import { useTheme } from "next-themes";
+import { shadcn } from "@clerk/themes";
 import type { ReactNode } from "react";
 
 type ThemedClerkProviderProps = {
   children: ReactNode;
 };
 
+// The shadcn theme reads the app's CSS variables, which already switch with
+// dark mode, so Clerk's own dark theme (hard-coded greys) isn't layered on.
 export function ThemedClerkProvider({
   children,
 }: ThemedClerkProviderProps) {
-  const { resolvedTheme } = useTheme();
-
   return (
     <ClerkProvider
       appearance={{
-        baseTheme: resolvedTheme === "dark" ? [shadcn, dark] : shadcn,
+        baseTheme: shadcn,
       }}
       signInFallbackRedirectUrl="/projects"
       signUpFallbackRedirectUrl="/projects"

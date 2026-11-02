@@ -1,9 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState } from "react";
-import { PanelLeftOpen } from "lucide-react";
 
-import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 
 type SidebarContextType = {
@@ -48,16 +46,6 @@ export function IssueWorkspaceLayout({
 
         {/* Right Pane */}
         <div className="relative flex min-w-0 flex-1 flex-col bg-[#f3efe5] dark:bg-[#201f1a]">
-          {!isOpen && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute left-4 top-[72px] z-10 h-8 w-8 shrink-0 rounded-none border border-[#171713]/15 bg-[#fffaf0]/90 text-[#6d675d] shadow-lg backdrop-blur hover:bg-[#f04f2f] hover:text-white dark:border-white/15 dark:bg-[#171713]/90 dark:text-[#aaa69d]"
-              onClick={() => setIsOpen(true)}
-            >
-              <PanelLeftOpen className="h-3.5 w-3.5" />
-            </Button>
-          )}
           {children}
         </div>
       </div>
