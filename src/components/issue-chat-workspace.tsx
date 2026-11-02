@@ -533,6 +533,20 @@ export function IssueChatWorkspace({
         </h1>
         <div className="flex shrink-0 items-center gap-1">
           {issueDetails}
+          <Button
+            className="h-7 rounded-none bg-[#171713] px-2.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#fffaf0] hover:bg-[#f04f2f] dark:bg-[#fffaf0] dark:text-[#171713] dark:hover:bg-[#f04f2f] dark:hover:text-white"
+            disabled={accessBlocked || isRunning || isSubmitting}
+            onClick={() => void handleSubmitChanges()}
+            title="Submit your changes for review"
+            type="button"
+          >
+            {isSubmitting ? (
+              <LoaderCircle className="mr-1 h-3 w-3 animate-spin" />
+            ) : (
+              <GitPullRequest className="mr-1 h-3 w-3" />
+            )}
+            {isSubmitting ? "Submitting" : "Submit"}
+          </Button>
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
               <Button
@@ -546,13 +560,6 @@ export function IssueChatWorkspace({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuItem
-                disabled={accessBlocked || isRunning || isSubmitting}
-                onClick={() => void handleSubmitChanges()}
-              >
-                <GitPullRequest className="h-3.5 w-3.5" />
-                Submit for review
-              </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link href="/activity">
                   <Activity className="h-3.5 w-3.5" />

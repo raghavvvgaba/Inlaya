@@ -54,12 +54,13 @@ export function IssueDetailsModal({
     <Sheet>
       <SheetTrigger asChild>
         <Button
-          size="sm"
-          variant="outline"
-          className="rounded-none border-[#171713]/20 bg-transparent px-4 text-[10px] font-bold uppercase tracking-[0.22em] text-[#171713] hover:border-[#f04f2f] hover:bg-[#f04f2f]/10 dark:border-[#fffaf0]/20 dark:text-[#fffaf0]"
+          aria-label="View issue"
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7 rounded-none text-[#6d675d] hover:bg-[#171713]/5 hover:text-[#171713] dark:text-[#aaa69d] dark:hover:bg-white/5 dark:hover:text-[#fffaf0]"
+          title="View issue"
         >
           <FileText className="h-3.5 w-3.5" />
-          View Issue
         </Button>
       </SheetTrigger>
       <SheetContent
