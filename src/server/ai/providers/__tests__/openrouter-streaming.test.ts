@@ -4,7 +4,7 @@ vi.mock("~/env", () => ({
   env: {
     GITHUB_APP_CALLBACK_URL: "https://example.com/api/github/callback",
     OPENROUTER_API_KEY: "openrouter-test-key",
-    OPENROUTER_MODEL: "deepseek-v4-flash",
+    OPENROUTER_MODEL: "z-ai/glm-5.3",
   },
 }));
 
@@ -40,7 +40,7 @@ describe("OpenRouter streaming", () => {
   it("reassembles split SSE events, ignores heartbeats and returns final usage", async () => {
     const first = data({
       choices: [{ delta: { content: '{"status":"completed",' } }],
-      model: "deepseek/deepseek-v4-flash",
+      model: "z-ai/glm-5.3",
     });
     const second = data({
       choices: [{ delta: { content: '"message":"Done."}' } }],
@@ -65,7 +65,7 @@ describe("OpenRouter streaming", () => {
 
     const result = await openRouterAiProvider.generateText({
       messages: [{ content: "Finish", role: "user" }],
-      model: "deepseek-v4-flash",
+      model: "z-ai/glm-5.3",
       onTextDelta(delta) {
         deltas.push(delta);
       },
@@ -77,7 +77,7 @@ describe("OpenRouter streaming", () => {
       '"message":"Done."}',
     ]);
     expect(result).toEqual({
-      model: "deepseek/deepseek-v4-flash",
+      model: "z-ai/glm-5.3",
       text: '{"status":"completed","message":"Done."}',
       usage: {
         completionTokens: 8,
@@ -135,7 +135,7 @@ describe("OpenRouter streaming", () => {
       new Response(
         JSON.stringify({
           choices: [{ message: { content: "Buffered." } }],
-          model: "deepseek/deepseek-v4-flash",
+          model: "z-ai/glm-5.3",
         }),
         { status: 200 },
       ),

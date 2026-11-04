@@ -28,7 +28,7 @@ Inlaya is a Next.js app for importing a GitHub repository, browsing its issues, 
 - Prisma + PostgreSQL
 - GitHub App / GitHub OAuth
 - E2B sandboxes
-- OpenRouter for AI edit generation and model selection
+- OpenRouter for AI edit generation
 
 ## Project Structure
 
@@ -103,18 +103,17 @@ Run the app locally:
 pnpm dev
 ```
 
-### Adding an OpenRouter agent model
+### Choosing the agent model
 
-Before adding a model to `AGENT_MODELS`:
+The agent uses a single model, set with `OPENROUTER_MODEL` (any OpenRouter model
+ID). It defaults to `z-ai/glm-5.3` when unset.
 
-1. Check its `supported_parameters` in OpenRouter's public
-   [`/api/v1/models`](https://openrouter.ai/api/v1/models) metadata.
-2. Confirm whether it supports both `tools` and `structured_outputs`.
-3. Set `supportsStrictToolArguments` explicitly in the model configuration.
-4. Run `pnpm test -- src/lib/__tests__/agent-models.test.ts src/server/ai/providers/__tests__/tool-strictness.test.ts`.
-
-Unknown models default to non-strict tool arguments. Local Zod validation remains
-required even when OpenRouter strict tool arguments are enabled.
+If you switch to a different model, check its `supported_parameters` in
+OpenRouter's [`/api/v1/models`](https://openrouter.ai/api/v1/models) metadata.
+Strict tool arguments and reasoning overrides are only applied to models listed
+in `KNOWN_MODELS` in `src/lib/agent-models.ts`; any other model runs with
+non-strict tool arguments and the provider's default reasoning. Local Zod
+validation remains required either way.
 
 ## Agent tracing with Jaeger
 

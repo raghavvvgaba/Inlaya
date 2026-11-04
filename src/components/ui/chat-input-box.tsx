@@ -3,22 +3,13 @@
 import { useEffect, useRef } from "react";
 import {
   ArrowUp,
-  CheckIcon,
-  ChevronDown,
   Hammer,
   ListTree,
   LoaderCircle,
 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu";
 import { cn } from "~/lib/utils";
-import { AGENT_MODELS, getAgentModelLabel } from "~/lib/agent-models";
 import type { SandboxAgentMode } from "~/server/sandbox/types";
 
 type ChatInputBoxProps = {
@@ -28,9 +19,7 @@ type ChatInputBoxProps = {
   mode: SandboxAgentMode;
   onInstructionChange: (value: string) => void;
   onModeChange: (mode: SandboxAgentMode) => void;
-  onModelChange: (model: string) => void;
   onPrepareEdit: () => void;
-  selectedModel: string;
 };
 
 export function ChatInputBox({
@@ -40,9 +29,7 @@ export function ChatInputBox({
   mode,
   onInstructionChange,
   onModeChange,
-  onModelChange,
   onPrepareEdit,
-  selectedModel,
 }: ChatInputBoxProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -116,49 +103,6 @@ export function ChatInputBox({
             })}
           </div>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                aria-label="Select model"
-                className={cn(
-                  "flex h-7 items-center gap-1 border border-[#171713]/15 bg-[#e8e2d5]/70 px-2 text-[10px] font-semibold text-foreground transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#f04f2f] disabled:cursor-not-allowed disabled:opacity-50 dark:border-[#fffaf0]/15 dark:bg-white/5",
-                )}
-                disabled={accessBlocked || isPreparing}
-                title="Select AI model"
-                type="button"
-              >
-                {getAgentModelLabel(selectedModel)}
-                <ChevronDown className="size-3 opacity-60" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="start"
-              side="top"
-              sideOffset={4}
-              className="min-w-44 rounded-none border-border"
-            >
-              {AGENT_MODELS.map((model) => {
-                const active = model.id === selectedModel;
-                return (
-                  <DropdownMenuItem
-                    key={model.id}
-                    className="rounded-none text-xs"
-                    onClick={() => {
-                      onModelChange(model.id);
-                    }}
-                  >
-                    <CheckIcon
-                      className={cn(
-                        "size-3.5",
-                        active ? "opacity-100" : "opacity-0",
-                      )}
-                    />
-                    {model.label}
-                  </DropdownMenuItem>
-                );
-              })}
-            </DropdownMenuContent>
-          </DropdownMenu>
         </div>
 
         <Button

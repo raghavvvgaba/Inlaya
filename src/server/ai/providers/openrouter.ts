@@ -3,8 +3,8 @@ import "server-only";
 import { env } from "~/env";
 import {
   getModelReasoningRequestConfig,
+  resolveAgentModel,
   supportsStrictToolArguments,
-  toOpenRouterModelId,
 } from "~/lib/agent-models";
 import type {
   AIGenerateTextInput,
@@ -166,8 +166,7 @@ function getUsage(response: OpenRouterResponse): AIUsage | undefined {
 }
 
 function getOpenRouterModel(modelOverride?: string) {
-  const model = modelOverride ?? env.OPENROUTER_MODEL;
-  return model ? toOpenRouterModelId(model) : undefined;
+  return modelOverride?.trim() || resolveAgentModel(env.OPENROUTER_MODEL);
 }
 
 function buildOpenRouterTools(

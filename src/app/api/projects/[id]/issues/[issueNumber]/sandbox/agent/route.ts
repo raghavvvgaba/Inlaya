@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { DEFAULT_AGENT_MODEL, isAgentModelId } from "~/lib/agent-models";
+import { env } from "~/env";
+import { resolveAgentModel } from "~/lib/agent-models";
 import {
   completeAgentRun,
   createAgentRun,
@@ -146,10 +147,7 @@ export async function POST(
   const sessionId = readStringField(body, "sessionId");
   const instruction = readStringField(body, "instruction");
   const mode = parseSandboxAgentMode(body?.mode);
-  const requestedModel = readStringField(body, "model");
-  const model = isAgentModelId(requestedModel)
-    ? requestedModel
-    : DEFAULT_AGENT_MODEL;
+  const model = resolveAgentModel(env.OPENROUTER_MODEL);
 
   if (!mode) {
     return jsonFailure("Choose either Ask or Build mode.", 400);

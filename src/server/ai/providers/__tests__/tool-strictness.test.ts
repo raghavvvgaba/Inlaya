@@ -6,7 +6,7 @@ vi.mock("~/env", () => ({
   env: {
     GITHUB_APP_CALLBACK_URL: "https://example.com/api/github/callback",
     OPENROUTER_API_KEY: "openrouter-test-key",
-    OPENROUTER_MODEL: "deepseek-v4-flash",
+    OPENROUTER_MODEL: "z-ai/glm-5.3",
   },
 }));
 
@@ -75,39 +75,26 @@ describe("AI provider tool strictness", () => {
     vi.unstubAllGlobals();
   });
 
-  it("enables strict tools and required-parameter routing for configured OpenRouter models", async () => {
+  it("enables strict tools and keeps default reasoning for GLM-5.3", async () => {
     const fetchMock = vi.mocked(fetch);
-    fetchMock.mockResolvedValueOnce(
-      successfulResponse("deepseek/deepseek-v4-flash"),
-    );
+    fetchMock.mockResolvedValueOnce(successfulResponse("z-ai/glm-5.3"));
 
-    await openRouterAiProvider.generateText(buildInput("deepseek-v4-flash"));
+    await openRouterAiProvider.generateText(buildInput("z-ai/glm-5.3"));
 
     const body = getRequestBody(fetchMock);
     expect(body.provider?.require_parameters).toBe(true);
-    expect(body.reasoning).toEqual({ enabled: true, exclude: false });
+    expect(body.reasoning).toBeUndefined();
     expect(body.tools?.[0]?.function.strict).toBe(true);
-  });
-
-  it("keeps default-on reasoning models on their OpenRouter defaults", async () => {
-    const fetchMock = vi.mocked(fetch);
-    fetchMock.mockResolvedValueOnce(
-      successfulResponse("moonshotai/kimi-k2.7-code"),
-    );
-
-    await openRouterAiProvider.generateText(buildInput("kimi-k2.7-code"));
-
-    expect(getRequestBody(fetchMock).reasoning).toBeUndefined();
   });
 
   it("honors an explicit provider-neutral reasoning configuration", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValueOnce(
-      successfulResponse("moonshotai/kimi-k2.7-code"),
+      successfulResponse("z-ai/glm-5.3"),
     );
 
     await openRouterAiProvider.generateText({
-      ...buildInput("kimi-k2.7-code"),
+      ...buildInput("z-ai/glm-5.3"),
       reasoning: { enabled: true, exclude: false },
     });
 

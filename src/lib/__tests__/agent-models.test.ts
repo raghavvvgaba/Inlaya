@@ -1,111 +1,37 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  AGENT_MODELS,
   buildModelReasoningRequestConfig,
   DEFAULT_AGENT_MODEL,
+  getAgentModelLabel,
   getModelReasoningRequestConfig,
+  resolveAgentModel,
   supportsStrictToolArguments,
-  toOpenRouterModelId,
 } from "~/lib/agent-models";
 
-describe("agent model mappings", () => {
-  it("maps every selectable model to its OpenRouter model ID", () => {
-    expect(
-      Object.fromEntries(
-        AGENT_MODELS.map(({ id }) => [id, toOpenRouterModelId(id)]),
-      ),
-    ).toEqual({
-      "deepseek-v4-flash": "deepseek/deepseek-v4-flash",
-      "deepseek-v4-pro": "deepseek/deepseek-v4-pro",
-      "glm-5.1": "z-ai/glm-5.1",
-      "glm-5.2": "z-ai/glm-5.2",
-      "kimi-k2.6": "moonshotai/kimi-k2.6",
-      "kimi-k2.7-code": "moonshotai/kimi-k2.7-code",
-      "mimo-v2.5": "xiaomi/mimo-v2.5",
-      "mimo-v2.5-pro": "xiaomi/mimo-v2.5-pro",
-    });
+describe("agent model configuration", () => {
+  it("defaults to GLM-5.3 when no model is configured", () => {
+    expect(DEFAULT_AGENT_MODEL).toBe("z-ai/glm-5.3");
+    expect(resolveAgentModel(undefined)).toBe("z-ai/glm-5.3");
+    expect(resolveAgentModel("  ")).toBe("z-ai/glm-5.3");
   });
 
-  it("keeps the default model selectable and mapped", () => {
-    expect(AGENT_MODELS.some(({ id }) => id === DEFAULT_AGENT_MODEL)).toBe(true);
-    expect(toOpenRouterModelId(DEFAULT_AGENT_MODEL)).toBe(
-      "moonshotai/kimi-k2.7-code",
+  it("uses the env-configured model as-is", () => {
+    expect(resolveAgentModel("anthropic/claude-opus-5")).toBe(
+      "anthropic/claude-opus-5",
     );
   });
 
-  it("declares strict tool-argument support for every selectable model", () => {
-    expect(
-      AGENT_MODELS.map(({ id, openRouterId, supportsStrictToolArguments }) => ({
-        id,
-        openRouterId,
-        supportsStrictToolArguments,
-      })),
-    ).toEqual(
-      AGENT_MODELS.map(({ id, openRouterId }) => ({
-        id,
-        openRouterId,
-        supportsStrictToolArguments: true,
-      })),
+  it("labels the known model and falls back to the raw ID", () => {
+    expect(getAgentModelLabel("z-ai/glm-5.3")).toBe("GLM-5.3");
+    expect(getAgentModelLabel("vendor/unknown-model")).toBe(
+      "vendor/unknown-model",
     );
-
-    for (const model of AGENT_MODELS) {
-      expect(supportsStrictToolArguments(model.id)).toBe(true);
-      expect(supportsStrictToolArguments(model.openRouterId)).toBe(true);
-    }
   });
 
-  it("defaults unknown models to non-strict tool arguments", () => {
+  it("enables strict tool arguments only for verified models", () => {
+    expect(supportsStrictToolArguments("z-ai/glm-5.3")).toBe(true);
     expect(supportsStrictToolArguments("vendor/unknown-model")).toBe(false);
-  });
-
-  it("matches OpenRouter reasoning capabilities for selectable models", () => {
-    expect(
-      Object.fromEntries(
-        AGENT_MODELS.map(({ id, reasoning }) => [id, reasoning]),
-      ),
-    ).toEqual({
-      "deepseek-v4-flash": {
-        defaultEnabled: false,
-        mandatory: false,
-        supported: true,
-      },
-      "deepseek-v4-pro": {
-        defaultEnabled: false,
-        mandatory: false,
-        supported: true,
-      },
-      "glm-5.1": {
-        defaultEnabled: true,
-        mandatory: false,
-        supported: true,
-      },
-      "glm-5.2": {
-        defaultEnabled: true,
-        mandatory: false,
-        supported: true,
-      },
-      "kimi-k2.6": {
-        defaultEnabled: true,
-        mandatory: false,
-        supported: true,
-      },
-      "kimi-k2.7-code": {
-        defaultEnabled: true,
-        mandatory: true,
-        supported: true,
-      },
-      "mimo-v2.5": {
-        defaultEnabled: false,
-        mandatory: false,
-        supported: true,
-      },
-      "mimo-v2.5-pro": {
-        defaultEnabled: false,
-        mandatory: false,
-        supported: true,
-      },
-    });
   });
 
   it("only enables reasoning when a supported model defaults it off", () => {
@@ -135,21 +61,9 @@ describe("agent model mappings", () => {
     ).toBeUndefined();
     expect(buildModelReasoningRequestConfig(undefined)).toBeUndefined();
 
-    expect(getModelReasoningRequestConfig("deepseek-v4-pro")).toEqual({
-      enabled: true,
-      exclude: false,
-    });
-    expect(
-      getModelReasoningRequestConfig("moonshotai/kimi-k2.7-code"),
-    ).toBeUndefined();
+    expect(getModelReasoningRequestConfig("z-ai/glm-5.3")).toBeUndefined();
     expect(
       getModelReasoningRequestConfig("vendor/unknown-model"),
     ).toBeUndefined();
-  });
-
-  it("preserves an already-qualified custom OpenRouter model ID", () => {
-    expect(toOpenRouterModelId("anthropic/claude-opus-5")).toBe(
-      "anthropic/claude-opus-5",
-    );
   });
 });

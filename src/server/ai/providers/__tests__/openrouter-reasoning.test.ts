@@ -4,7 +4,7 @@ vi.mock("~/env", () => ({
   env: {
     GITHUB_APP_CALLBACK_URL: "https://example.com/api/github/callback",
     OPENROUTER_API_KEY: "openrouter-test-key",
-    OPENROUTER_MODEL: "deepseek-v4-flash",
+    OPENROUTER_MODEL: "z-ai/glm-5.3",
   },
 }));
 
@@ -14,7 +14,7 @@ function response(message: Record<string, unknown>, reasoningTokens = 0) {
   return new Response(
     JSON.stringify({
       choices: [{ message }],
-      model: "deepseek/deepseek-v4-flash",
+      model: "z-ai/glm-5.3",
       usage: {
         completion_tokens: 8,
         completion_tokens_details: { reasoning_tokens: reasoningTokens },
@@ -68,7 +68,7 @@ describe("OpenRouter reasoning continuity", () => {
     await expect(
       openRouterAiProvider.generateText({
         messages: [{ content: "Inspect the file.", role: "user" }],
-        model: "deepseek-v4-flash",
+        model: "z-ai/glm-5.3",
       }),
     ).resolves.toMatchObject({
       reasoning: { details: reasoningDetails, type: "details" },

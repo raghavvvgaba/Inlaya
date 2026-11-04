@@ -39,7 +39,6 @@ import {
   removeTransientAgentMessages,
   workingMessageId,
 } from "~/lib/agent-stream-state";
-import { DEFAULT_AGENT_MODEL, isAgentModelId } from "~/lib/agent-models";
 import { buildIssueChatRuntimeMessage } from "~/lib/issue-chat-messages";
 import { sandboxSessionUpdatedEvent } from "~/lib/sandbox-events";
 import { parseSseFrames } from "~/lib/sse";
@@ -150,24 +149,6 @@ export function IssueChatWorkspace({
     () => `devin:sandbox:${projectId}`,
     [projectId],
   );
-  const modelStorageKey = useMemo(
-    () => `devin:sandbox:${projectId}:model`,
-    [projectId],
-  );
-  const [selectedModel, setSelectedModel] = useState<string>(() => {
-    try {
-      const saved = window.localStorage.getItem(modelStorageKey);
-      return isAgentModelId(saved) ? saved : DEFAULT_AGENT_MODEL;
-    } catch {
-      return DEFAULT_AGENT_MODEL;
-    }
-  });
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(modelStorageKey, selectedModel);
-    } catch {}
-  }, [modelStorageKey, selectedModel]);
   const hasVisibleMessages = messages.some((message) => !message.isThinking);
   const canClearChat =
     !accessBlocked &&
@@ -355,7 +336,6 @@ export function IssueChatWorkspace({
         body: JSON.stringify({
           instruction: trimmedInstruction,
           mode: agentMode,
-          model: selectedModel,
           sessionId,
         }),
         headers: {
@@ -642,9 +622,7 @@ export function IssueChatWorkspace({
         mode={agentMode}
         onInstructionChange={setInstruction}
         onModeChange={setAgentMode}
-        onModelChange={setSelectedModel}
         onPrepareEdit={handleRunAgent}
-        selectedModel={selectedModel}
       />
       </AIChat>
     </div>
