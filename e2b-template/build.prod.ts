@@ -9,7 +9,7 @@ const TEMPLATE_NAME = "gabatools/devin-sandbox";
 async function main() {
   const build = await Template.build(template, TEMPLATE_NAME, {
     cpuCount: 2,
-    memoryMB: 512,
+    memoryMB: 2048,
     onBuildLogs: defaultBuildLogger(),
   });
 
