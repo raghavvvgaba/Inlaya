@@ -141,9 +141,6 @@ export function IssueChatWorkspace({
   const [isClearingChat, setIsClearingChat] = useState(false);
   const [isClearChatDialogOpen, setIsClearChatDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // Only tracks build runs from this page visit; the header menu still
-  // allows submitting changes made before a reload.
-  const [hasPendingChanges, setHasPendingChanges] = useState(false);
   const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(null);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
   const [submitSessionId, setSubmitSessionId] = useState<string | null>(null);
@@ -329,7 +326,6 @@ export function IssueChatWorkspace({
   async function handleRunAgent() {
     const trimmedInstruction = instruction.trim();
     const sessionId = getSandboxSessionId();
-    const runMode = agentMode;
 
     if (!trimmedInstruction || accessBlocked || isRunning) {
       return;
@@ -396,9 +392,6 @@ export function IssueChatWorkspace({
         ),
         ...nextMessages,
       ]);
-      if (runMode === "build" && result.status === "completed") {
-        setHasPendingChanges(true);
-      }
       window.dispatchEvent(
         new CustomEvent(sandboxSessionUpdatedEvent, {
           detail: { projectId, sessionId },
@@ -458,7 +451,6 @@ export function IssueChatWorkspace({
       }
 
       setSubmitMessage(result.message);
-      setHasPendingChanges(false);
 
       if (result.pullRequestUrl) {
         setPullRequestUrl(result.pullRequestUrl);
@@ -638,11 +630,8 @@ export function IssueChatWorkspace({
         messages={messages}
       >
       <SubmitReviewCard
-        accessBlocked={accessBlocked}
-        hasPendingChanges={hasPendingChanges}
         isRunning={isRunning}
         isSubmitting={isSubmitting}
-        onSubmit={handleSubmitChanges}
         pullRequestUrl={pullRequestUrl}
         submitMessage={submitMessage}
       />
@@ -663,23 +652,17 @@ export function IssueChatWorkspace({
 }
 
 function SubmitReviewCard({
-  accessBlocked,
-  hasPendingChanges,
   isRunning,
   isSubmitting,
-  onSubmit,
   pullRequestUrl,
   submitMessage,
 }: {
-  accessBlocked: boolean;
-  hasPendingChanges: boolean;
   isRunning: boolean;
   isSubmitting: boolean;
-  onSubmit: () => void;
   pullRequestUrl: string | null;
   submitMessage: string | null;
 }) {
-  if (isRunning || (!isSubmitting && !hasPendingChanges && !pullRequestUrl)) {
+  if (isRunning || (!isSubmitting && !pullRequestUrl)) {
     return null;
   }
 
@@ -692,22 +675,6 @@ function SubmitReviewCard({
     icon = <LoaderCircle className="h-4 w-4 animate-spin text-[#f04f2f]" />;
     title = "Submitting for review";
     body = submitMessage ?? "Preparing your changes";
-  } else if (hasPendingChanges) {
-    icon = <GitPullRequest className="h-4 w-4 text-[#f04f2f]" />;
-    title = pullRequestUrl ? "New changes ready" : "Your changes are ready";
-    body = pullRequestUrl
-      ? "Submit again to add them to the open pull request."
-      : "Check the preview, then submit them for review.";
-    action = (
-      <Button
-        className="h-8 shrink-0 rounded-none bg-[#171713] px-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#fffaf0] hover:bg-[#f04f2f] dark:bg-[#fffaf0] dark:text-[#171713] dark:hover:bg-[#f04f2f] dark:hover:text-white"
-        disabled={accessBlocked}
-        onClick={onSubmit}
-        type="button"
-      >
-        Submit for review
-      </Button>
-    );
   } else {
     icon = <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />;
     title = "Submitted for review";
