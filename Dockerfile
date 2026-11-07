@@ -27,5 +27,14 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
+# Schema, migrations and the Prisma CLI so pending migrations are applied on
+# startup (Render's free tier has no pre-deploy command). The standalone output
+# doesn't include either. Keep the CLI version in sync with package.json.
+COPY --from=builder /app/prisma ./prisma
+RUN npm install -g prisma@6.19.3 && npm cache clean --force
+
 EXPOSE 3000
-CMD ["node", "server.js"]
+# Applies only migrations not yet recorded in the database (a no-op when there
+# are none), then starts the server. If a migration fails, the server doesn't
+# start. Needs DIRECT_URL (unpooled) alongside DATABASE_URL.
+CMD ["sh", "-c", "prisma migrate deploy && exec node server.js"]
